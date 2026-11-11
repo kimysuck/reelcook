@@ -1,0 +1,31 @@
+{
+  "name": "릴쿡 — 릴스를 레시피로",
+  "short_name": "릴쿡",
+  "description": "인스타 요리 릴스를 초보도 따라 할 수 있는 정확한 레시피로",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8F1",
+  "theme_color": "#FF6B2C",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        { "name": "media", "accept": ["image/*", "video/*", ".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov"] }
+      ]
+    }
+  }
+}

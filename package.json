@@ -1,0 +1,8 @@
+{
+  "name": "reelcook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "인스타 요리 릴스를 초보용 정밀 레시피로 바꿔주는 PWA",
+  "engines": { "node": ">=20" }
+}
