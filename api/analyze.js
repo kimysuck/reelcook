@@ -69,9 +69,9 @@ function parseRecipe(text) {
   try { const a = text.indexOf('{'), b = text.lastIndexOf('}'); return JSON.parse(text.slice(a, b + 1)); } catch { return null; }
 }
 
-async function callGemini(key, model, parts, generationConfig) {
+async function callGemini(key, model, parts, generationConfig, signal) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST',
+    method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig }),
   });
@@ -80,87 +80,132 @@ async function callGemini(key, model, parts, generationConfig) {
   return { status: r.status, ok: r.ok, data, text, finish: data.candidates?.[0]?.finishReason || '' };
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
-  const pass = process.env.APP_PASSCODE;
-  if (pass && req.headers['x-app-passcode'] !== pass) return res.status(401).json({ error: 'passcode' });
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return res.status(500).json({ error: 'no_key' });
+const DEADLINE_MS = 270_000; // Vercel 300초 제한 전에 스스로 정리하고 안내
 
-  const body = req.body || {};
+// 핵심 처리. emit(event)로 진행 상황을 알린다 (스트리밍 모드에서 화면에 표시)
+async function run(body, emit, t0) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return { status: 500, json: { error: 'no_key' } };
   let caption = String(body.caption || '').slice(0, 8000);
   let comments = (Array.isArray(body.comments) ? body.comments : []).map(c => String(c).slice(0, 1500)).slice(0, 4);
   let videoUrl = body.videoUrl ? String(body.videoUrl) : null;
+  let duration = Number(body.duration) || null;
   const link = String(body.link || '').slice(0, 500);
   const fromVideo = !!body.fromVideo;
   const images = Array.isArray(body.images) ? body.images.slice(0, MAX_IMAGES) : [];
   for (const im of images) {
     if (!im || typeof im.data !== 'string' || !/^image\/(jpeg|png|webp)$/.test(im.mime) || im.data.length > MAX_IMAGE_B64) {
-      return res.status(400).json({ error: 'bad_image' });
+      return { status: 400, json: { error: 'bad_image' } };
     }
   }
   const notes = [];
 
-  // 예전 앱(링크만 보냄) 호환: 서버가 직접 릴스 정보를 가져온다
+  // 링크만 왔으면 서버가 릴스 정보를 직접 가져온다
   if (shortcodeOf(link) && !body.fetched && !images.length) {
+    emit({ stage: 'fetch' });
     const m = await getReelMeta(link).catch(() => null);
-    if (m) { caption = caption || m.caption; comments = comments.length ? comments : m.comments; videoUrl = videoUrl || m.videoUrl; notes.push(...m.notes); }
+    if (m) {
+      caption = [caption, m.caption].filter(Boolean).join('\n\n'); comments = comments.length ? comments : m.comments;
+      videoUrl = videoUrl || m.videoUrl; duration = duration || m.duration; notes.push(...m.notes);
+      emit({ stage: 'fetched', caption: m.caption || '', comments: m.comments || [], videoUrl: !!m.videoUrl, duration: m.duration || null });
+    }
   }
 
-  const video = videoUrl && !images.length ? await downloadVideo(videoUrl, notes) : null;
-  if (!caption.trim() && !comments.length && !images.length && !video) {
-    return res.status(422).json({ error: 'need_input', notes });
-  }
+  let video = null;
+  if (videoUrl && !images.length) { emit({ stage: 'download' }); video = await downloadVideo(videoUrl, notes); }
+  if (!caption.trim() && !comments.length && !images.length && !video) return { status: 422, json: { error: 'need_input', notes } };
 
-  // 캡션·댓글에 레시피가 적혀 있으면 영상은 보조 → 빠른 설정.
-  // 글로 된 레시피가 없으면(요리 장면만 있는 영상) 화면을 더 자세히 보고 더 깊게 추론 → 정확도 우선.
+  // 설정 선택: 글 레시피가 있으면 빠르게, 화면만 있으면 꼼꼼하게, 긴 영상은 초당 장면 수를 줄여 시간 단축
   const textHasRecipe = RECIPE_HINT.test(caption + '\n' + comments.join('\n'));
-  const visualOnly = !textHasRecipe && (video || images.length);
-  const primaryCfg = visualOnly
+  const visualOnly = !textHasRecipe && !!(video || images.length);
+  const longVideo = !!video && ((duration && duration > 75) || video.bytes > 12 * 1024 * 1024);
+  const fps = !video ? null : duration > 180 ? 0.25 : longVideo ? 0.5 : null; // 기본 1fps
+  const primaryCfg = visualOnly && !longVideo
     ? { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'medium' } }
-    : { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' };
+    : { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: visualOnly ? 'medium' : 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' };
   const plainCfg = { responseMimeType: 'application/json' };
 
-  const parts = [{ text: buildPrompt({ caption, comments, link, nImg: images.length, fromVideo, hasVideo: !!video }) }];
-  if (video) parts.push({ inline_data: { mime_type: video.mime, data: video.b64 } });
-  for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
-  const source = { gotCaption: !!caption, gotComments: comments.length, gotVideo: !!video, visualOnly: !!visualOnly, caption: caption.slice(0, 3000), comments, notes };
+  const buildParts = (withMeta) => {
+    const parts = [{ text: buildPrompt({ caption, comments, link, nImg: images.length, fromVideo, hasVideo: !!video }) }];
+    if (video) parts.push({ inline_data: { mime_type: video.mime, data: video.b64 }, ...(withMeta && fps ? { video_metadata: { fps } } : {}) });
+    for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
+    return parts;
+  };
+  let parts = buildParts(true);
+  const source = { gotCaption: !!caption, gotComments: comments.length, gotVideo: !!video, visualOnly, longVideo, fps, caption: caption.slice(0, 3000), comments, notes };
+  emit({ stage: 'analyze', visualOnly, longVideo, gotVideo: !!video, videoMB: video ? +(video.bytes / 1048576).toFixed(1) : 0 });
+
+  const left = () => DEADLINE_MS - (Date.now() - t0);
+  let lastErr = null;
+  for (const model of MODELS) {
+    let cfg = primaryCfg, r = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (left() < 8000) return { status: 504, json: { error: 'too_long', notes } };
+      const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), left());
+      try { r = await callGemini(key, model, parts, cfg, ctrl.signal); }
+      catch (e) { if (e.name === 'AbortError') return { status: 504, json: { error: 'too_long', notes } }; throw e; }
+      finally { clearTimeout(tm); }
+      const msg = r.data?.error?.message || '';
+      if (r.status === 400 && /thinking|media_?resolution|video_?metadata|fps|Unknown name|Invalid value/i.test(msg)) {
+        if (cfg !== plainCfg || parts[1]?.video_metadata) { cfg = plainCfg; parts = buildParts(false); notes.push('plain_' + model); continue; }
+      }
+      if ((r.status === 503 || r.status === 500 || (!r.ok && r.status !== 429 && BUSY.test(msg))) && attempt < 2) { emit({ stage: 'busy', model }); await sleep(attempt ? 4000 : 1500); continue; }
+      if (r.ok) {
+        const rec = parseRecipe(r.text);
+        const empty = !rec || !Array.isArray(rec.ingredients) || !rec.ingredients.length;
+        if (empty && cfg !== plainCfg && (video || images.length) && left() > 60000) {
+          notes.push('retry_' + (rec ? 'empty' : 'badjson') + '_' + r.finish); emit({ stage: 'retry' });
+          cfg = plainCfg; parts = buildParts(false); continue;
+        }
+      }
+      break;
+    }
+    const msg = r.data?.error?.message || '';
+    if (r.status === 503 || r.status === 500 || (!r.ok && r.status !== 429 && BUSY.test(msg))) { lastErr = { busy: true }; continue; }
+    if (r.status === 429) return { status: 429, json: { error: 'rate_limited' } };
+    if (!r.ok) {
+      console.error('Gemini error', model, r.status, msg.slice(0, 300));
+      lastErr = { status: r.status, message: msg };
+      if ([400, 403, 404].includes(r.status) && /model|no longer|not found|not supported/i.test(msg)) continue;
+      break;
+    }
+    if (!r.text) return { status: 502, json: { error: 'empty_answer', finish: r.finish, notes } };
+    return { status: 200, json: { text: r.text, model, source } };
+  }
+  if (lastErr?.busy) return { status: 503, json: { error: 'busy' } };
+  return { status: 502, json: { error: 'gemini', status: lastErr?.status, message: lastErr?.message || '', notes } };
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+  const pass = process.env.APP_PASSCODE;
+  if (pass && req.headers['x-app-passcode'] !== pass) return res.status(401).json({ error: 'passcode' });
+  const body = req.body || {};
+  const t0 = Date.now();
+
+  // 스트리밍 모드: 진행 상황 + 5초마다 신호를 보내 휴대폰 네트워크가 연결을 끊지 않게 한다
+  if (body.stream) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    const send = obj => { try { res.write(JSON.stringify(obj) + '\n'); } catch {} };
+    send({ stage: 'start' });
+    const hb = setInterval(() => send({ ping: Math.round((Date.now() - t0) / 1000) }), 5000);
+    try {
+      const out = await run(body, send, t0);
+      send({ done: true, status: out.status, ...out.json });
+    } catch (e) {
+      console.error(e); send({ done: true, status: 500, error: 'server' });
+    } finally { clearInterval(hb); res.end(); }
+    return;
+  }
 
   try {
-    let lastErr = null;
-    for (const model of MODELS) {
-      let cfg = primaryCfg, r;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        r = await callGemini(key, model, parts, cfg);
-        const msg = r.data?.error?.message || '';
-        // 옵션 미지원 → 기본 설정으로
-        if (r.status === 400 && cfg !== plainCfg && /thinking|media_?resolution|Unknown name|Invalid value/i.test(msg)) { cfg = plainCfg; continue; }
-        // 붐빔 → 잠깐 쉬고 재시도 (최대 2번)
-        if ((r.status === 503 || r.status === 500 || (!r.ok && r.status !== 429 && BUSY.test(msg))) && attempt < 2) { await sleep(attempt ? 4000 : 1500); continue; }
-        // 답은 왔는데 레시피가 비었거나 JSON이 깨짐 → 더 꼼꼼한 설정으로 한 번 더
-        if (r.ok) {
-          const rec = parseRecipe(r.text);
-          const empty = !rec || !Array.isArray(rec.ingredients) || !rec.ingredients.length;
-          if (empty && cfg !== plainCfg && (video || images.length)) { notes.push('retry_' + (rec ? 'empty' : 'badjson') + '_' + r.finish); cfg = plainCfg; continue; }
-        }
-        break;
-      }
-      const msg = r.data?.error?.message || '';
-      if (r.status === 503 || r.status === 500 || (!r.ok && r.status !== 429 && BUSY.test(msg))) { lastErr = { busy: true }; continue; }
-      if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
-      if (!r.ok) {
-        console.error('Gemini error', model, r.status, msg.slice(0, 300));
-        lastErr = { status: r.status, message: msg };
-        if ([400, 403, 404].includes(r.status) && /model|no longer|not found|not supported/i.test(msg)) continue;
-        break;
-      }
-      if (!r.text) return res.status(502).json({ error: 'empty_answer', finish: r.finish, notes });
-      return res.status(200).json({ text: r.text, model, source });
-    }
-    if (lastErr?.busy) return res.status(503).json({ error: 'busy' });
-    return res.status(502).json({ error: 'gemini', status: lastErr?.status, message: lastErr?.message || '', notes });
+    const out = await run(body, () => {}, t0);
+    return res.status(out.status).json(out.json);
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'server', notes });
+    return res.status(500).json({ error: 'server' });
   }
 }
