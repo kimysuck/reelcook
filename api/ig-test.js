@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     apifyConfigured: !!process.env.APIFY_TOKEN,
     captionFound: !!r.caption,
     captionPreview: r.caption.slice(0, 300),
+    comments: r.comments,
     videoFound: !!r.videoB64,
     videoMB: +(r.videoBytes / 1048576).toFixed(2),
     notes: r.notes,
