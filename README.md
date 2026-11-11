@@ -15,7 +15,7 @@
 |---|---|---|
 | `GEMINI_API_KEY` | ✅ | Google AI Studio에서 발급한 키 (`AIza…`) |
 | `APP_PASSCODE` | 권장 | 아무 비밀번호. 앱 ⚙️ 설정에 같은 값 입력 |
-| `GEMINI_MODEL` | 선택 | 기본 `gemini-2.5-flash` |
+| `GEMINI_MODEL` | 선택 | 기본 `gemini-3.8-flash` (실패 시 3.5-flash로 자동 전환) |
 | `APIFY_TOKEN` | 자동 분석에 필요 | Apify API 토큰. 인스타가 Vercel 서버 IP를 막기 때문에 대행 서비스로 릴스 캡션·영상을 가져옴 |
 
 환경변수를 바꾼 뒤에는 **Redeploy** 해야 반영됩니다.

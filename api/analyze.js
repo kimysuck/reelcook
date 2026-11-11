@@ -5,7 +5,8 @@ import { fetchInstagram, shortcodeOf } from '../lib/instagram.js';
 
 export const config = { maxDuration: 60 };
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// 모델은 자주 바뀌므로: 환경변수 GEMINI_MODEL이 있으면 그것을 먼저, 실패하면 다음 후보로 자동 전환
+const MODELS = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash'].filter(Boolean))];
 const MAX_IMAGES = 8;
 const MAX_IMAGE_B64 = 1_500_000; // 이미지 1장당 약 1.1MB까지
 
@@ -78,23 +79,31 @@ export default async function handler(req, res) {
   const source = { auto: !!ig, gotCaption: !!autoCaption, gotVideo: hasVideo, caption: autoCaption.slice(0, 2000), notes: ig ? ig.notes : [] };
 
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-      }),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
-    if (!r.ok) {
-      console.error('Gemini error', r.status, JSON.stringify(data).slice(0, 500));
-      return res.status(502).json({ error: 'gemini', status: r.status, message: data?.error?.message || '' });
+    let lastErr = null;
+    for (const model of MODELS) {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
+      if (!r.ok) {
+        const msg = data?.error?.message || '';
+        console.error('Gemini error', model, r.status, msg.slice(0, 300));
+        lastErr = { status: r.status, message: msg };
+        // 모델이 없어졌거나 못 쓰는 경우에만 다음 모델로
+        if ((r.status === 404 || r.status === 400 || r.status === 403) && /model|no longer|not found|not supported/i.test(msg)) continue;
+        break;
+      }
+      const text = (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || '').join('');
+      if (!text) return res.status(502).json({ error: 'empty_answer' });
+      return res.status(200).json({ text, model, source });
     }
-    const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-    if (!text) return res.status(502).json({ error: 'empty_answer' });
-    return res.status(200).json({ text, model: MODEL, source });
+    return res.status(502).json({ error: 'gemini', status: lastErr?.status, message: lastErr?.message || '' });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server' });
