@@ -53,7 +53,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
 - heat: "약불","중불","강불","불 끔","없음" 중 하나. seconds: 그 단계 소요 시간(초).
 - cue: 다음 단계로 넘어가도 되는 상태(눈으로 확인 가능하게). tip: 초보 팁 한 문장. mistake: 흔한 실수 한 문장(없으면 "").
 - 문장은 짧게, 한 단계에 한 동작 위주로.
-${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나오는 구간을 clip {"start":"MM:SS","end":"MM:SS"}로, 결과가 가장 잘 보이는 순간을 photo "MM:SS"로. 실제 화면 기준으로만 적고, 안 나온 단계는 null.` : ''}${nImg ? `- 장면 번호: 각 단계에 가장 잘 맞는 이미지 번호를 frame(0부터)으로. 없으면 null.` : ''}
+${hasVideo ? `- cover_time: 완성된 음식(그릇·접시에 담긴 결과물)이 가장 크고 먹음직스럽게 보이는 순간 "MM:SS". 사람 얼굴·글자만 있는 화면, 재료 손질 장면은 피한다. 완성 장면이 없으면 마지막 단계 결과가 잘 보이는 순간.\n` : ''}${nImg ? `- cover_frame: 완성된 음식이 가장 잘 보이는 이미지 번호(0부터).\n` : ''}${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나오는 구간을 clip {"start":"MM:SS","end":"MM:SS"}로, 결과가 가장 잘 보이는 순간을 photo "MM:SS"로. 실제 화면 기준으로만 적고, 안 나온 단계는 null.` : ''}${nImg ? `- 장면 번호: 각 단계에 가장 잘 맞는 이미지 번호를 frame(0부터)으로. 없으면 null.` : ''}
 
 [장보기 — 간단하게]
 - buy: 장을 봐야 하는 재료만 true. 물, 소금, 후추, 설탕, 식용유, 간장, 참기름, 다진마늘 같은 기본 양념은 false.
@@ -63,7 +63,7 @@ ${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나�
 
 출력 JSON(이 키만, 값이 없거나 null인 키는 생략해도 된다):
 {"is_food":true,"reason":"","evidence":{"speech":"","onscreen_text":"","caption":"레시피|안내|없음","comments_used":[]},
-"recipes":[{"title":"","summary":"한 줄","servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","sources":["caption"],"assumptions":[""],
+"recipes":[{"title":"","summary":"한 줄",${hasVideo ? '"cover_time":"00:41",' : ''}${nImg ? '"cover_frame":3,' : ''}"servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","sources":["caption"],"assumptions":[""],
 "ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
 "steps":[{"text":"","heat":"중불","seconds":60,"cue":"","tip":"","mistake":""${hasVideo ? ',"clip":{"start":"00:05","end":"00:09"},"photo":"00:08"' : ''}${nImg ? ',"frame":0' : ''}}],
 "tools":[{"name":"","buy_keyword":""}],
@@ -133,7 +133,7 @@ async function run(body, emit, t0) {
     if (m) {
       caption = [caption, m.caption].filter(Boolean).join('\n\n'); if (!comments.length) comments = normComments(m.comments);
       videoUrl = videoUrl || m.videoUrl; duration = duration || m.duration; notes.push(...m.notes);
-      emit({ stage: 'fetched', caption: m.caption || '', comments: showComments(comments), videoUrl: !!m.videoUrl, duration: m.duration || null });
+      emit({ stage: 'fetched', caption: m.caption || '', comments: showComments(comments), videoUrl: !!m.videoUrl, videoSrc: m.videoUrl && CDN_OK.test(m.videoUrl) ? m.videoUrl : null, duration: m.duration || null });
     }
   }
 

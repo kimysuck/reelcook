@@ -390,6 +390,47 @@ html.nosplash #splash{display:none}
 .usage th{font-size:.76rem;color:var(--sub);font-weight:700}
 .usage tr.ex td{color:var(--hot)}
 
+/* 표지 고르기 */
+.hbtn{position:absolute;right:14px;bottom:12px;display:inline-flex;align-items:center;gap:6px;background:rgba(43,30,24,.72);color:#fff;font-size:.82rem;font-weight:700;padding:7px 12px;border-radius:18px}
+.hbtn .ic{width:16px;height:16px}
+.cpick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.cpick button{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/5;background:var(--line2)}
+.cpick img{width:100%;height:100%;object-fit:cover;display:block}
+.cpick span{position:absolute;left:6px;bottom:6px;background:rgba(43,30,24,.75);color:#fff;font-size:.72rem;padding:2px 7px;border-radius:10px}
+
+/* 전체 화면 영상 가이드 */
+#player{position:fixed;inset:0;z-index:95;background:#000;color:#FAF1E8;display:flex;flex-direction:column}
+#player video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#player .pl-tap{position:absolute;inset:0;z-index:1}
+#player.paused .pl-tap::after{content:"";position:absolute;left:50%;top:42%;margin:-26px 0 0 -16px;border-left:42px solid rgba(255,255,255,.85);border-top:26px solid transparent;border-bottom:26px solid transparent}
+.pl-top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 12px 24px;background:linear-gradient(rgba(0,0,0,.55),transparent);font-weight:700;font-size:.92rem}
+.pl-top button{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.35)}
+.pl-guide{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:6px 18px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(20,14,11,.82) 18%,rgba(20,14,11,.94));max-height:62vh;overflow:auto}
+.pl-handle{display:block;width:100%;height:24px}
+.pl-handle i{display:block;width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,.45);margin:6px auto 0}
+.pl-sn{display:flex;align-items:center;gap:10px}
+.pl-sn .disp{font-size:1.9rem;line-height:1;color:var(--yolk)}
+.pl-sn .heat{margin:0}
+.pl-st{font-size:1.18rem;line-height:1.55;margin-top:6px}
+.pl-st b{background:linear-gradient(transparent 58%, rgba(255,184,28,.42) 58%)}
+.pl-guide .cue,.pl-guide .tip{font-size:.92rem;color:#EADDD2;margin-top:8px}
+.pl-guide .cue::before{color:#9FD18F}.pl-guide .tip::before{color:#C9B8AC}
+.pl-guide .timer{border-color:#5F4C42;color:#FAF1E8}.pl-guide .timer button{color:var(--yolk)}
+.pl-guide.min .pl-st{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pl-guide.min .timer{display:none}
+.pl-nav{display:flex;gap:8px;margin-top:12px}
+.pl-nav .btn{flex:1;min-height:50px;font-size:.95rem;padding:0 8px}
+.pl-nav .prev,.pl-nav #pll{background:rgba(255,255,255,.12);color:#FAF1E8}
+.pl-nav #pll.on{background:var(--yolk);color:#1E1512}
+.pl-nav .btn.pri{background:var(--yolk);color:#1E1512}
+.pl-nav .btn:disabled{opacity:.35}
+@media (orientation: landscape) and (min-width:640px){
+  #player video{right:44%;width:56%}
+  .pl-guide{left:56%;top:0;max-height:none;background:#140E0B;padding-top:calc(70px + env(safe-area-inset-top))}
+  .pl-top{width:56%}
+  #player .pl-tap{right:44%}
+}
+
 /* 약관 동의 화면 */
 #gate{position:fixed;inset:0;z-index:350;background:var(--bg);overflow:auto}
 #gate .in{max-width:560px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom))}
@@ -444,7 +485,7 @@ html.nosplash #splash{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.3.2';
+const VERSION='v1.4';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -491,7 +532,7 @@ async function storeCover(id, cover){
 }
 async function ensureCover(m){
   const rec=S.recipe; if(!rec || rec.cover) return;
-  const b=lastBlob(m.thumbBlobs); if(!b) return;
+  const b=m.coverBlob||lastBlob(m.thumbBlobs); if(!b) return;
   const c=await coverFrom(b); if(!c || S.recipe!==rec || rec.cover) return;
   rec.cover=c; if(S.recipeSavedId) storeCover(S.recipeSavedId,c);
   if(!S.cooking && !playing) render();
@@ -750,7 +791,7 @@ async function analyze(opts={}){
     const data=await streamAnalyze(body, ev=>{
       if (ev.stage==='cached'){ S.phase='cached'; render(); }
       else if (ev.stage==='fetch'){ S.phase='fetch'; render(); }
-      else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; render(); }
+      else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; if (ev.videoSrc) prefetchReel(ev.videoSrc); render(); }
       else if (ev.stage==='download'){ S.phase='download'; render(); }
       else if (ev.stage==='analyze'){ S.phase='analyze'; S.fetched={...(S.fetched||{}), visualOnly:ev.visualOnly, longVideo:ev.longVideo, gotVideo:ev.gotVideo, videoMB:ev.videoMB}; render(); }
       else if (ev.stage==='busy'){ S.note2='AI 모델이 잠시 붐벼서 한 번 더 시도하는 중…'; render(); }
@@ -885,7 +926,7 @@ function bindImport(){
 }
 
 /* ---------- 레시피 상세 ---------- */
-function openRecipe(r, savedId, set){ clearMedia(); S.recipeSet=set&&set.length>1?set:null; S.setIdx=0; S.setSaved={}; if(!S.recipeSet) S.setMedia=null; S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
+function openRecipe(r, savedId, set){ clearMedia(); S.recipeSet=set&&set.length>1?set:null; S.setIdx=0; S.setSaved={}; if(!set) S.setMedia=null; S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
 function k(){ return S.servings / S.recipe.servings; }
 function stepHTML(text){ const r=S.recipe; return esc(text).replace(/\[\[(\d+)\]\]/g,(m,i)=>{ const ing=r.ingredients[+i]; if(!ing) return ''; const a=amountOf(ing,k()); return `<b>${esc(ing.name)} ${esc(a.big==='적당량'||a.big==='약간'?'약간':a.big)}</b>`; }); }
 const SRC_NAME={caption:'캡션', owner_comment:'작성자 댓글', viewer_comment:'시청자 댓글(추정에만)', onscreen_text:'화면 자막', speech:'음성 설명', visual:'화면 장면'};
@@ -910,7 +951,7 @@ function viewRecipe(){
     + (r.beginner_notes.length?`<div class="notes"><h4>시작하기 전에</h4><ul>${r.beginner_notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul></div>`:'');
   }
   if (S.rtab==='step'){
-    body = r.steps.map((s,i)=>`<div class="stepc"><div class="no">${i+1}</div><div style="min-width:0">
+    body = (videoSrc()||(mediaLoading()&&r.steps.some(x=>x.clip)) ? `<button class="btn pri" id="vguide" style="margin-top:18px;min-height:54px">${IC.play}영상 보면서 따라하기</button>` : '') + r.steps.map((s,i)=>`<div class="stepc"><div class="no">${i+1}</div><div style="min-width:0">
       ${heatHTML(s.heat)}
       <div class="stx">${stepHTML(s.text)}</div>
       ${s.cue?`<div class="cue"><span>${esc(s.cue)}</span></div>`:''}
@@ -943,7 +984,7 @@ function viewRecipe(){
   const conf = r.confidence==='low'?'<span class="chip warn">추정이 많아요</span>':r.confidence==='medium'?'<span class="chip warn">일부 추정</span>':'';
   const pick = S.recipeSet ? `<div class="pick"><div class="pk-h">이 릴스에 레시피가 ${S.recipeSet.length}개 있어요</div><div class="pk">${S.recipeSet.map((x,i)=>`<button data-pick="${i}" class="${i===S.setIdx?'on':''}" aria-pressed="${i===S.setIdx}"><span class="n">${i+1}</span>${esc(x.title)}${S.setSaved[i]?` ${IC.saved}`:''}</button>`).join('')}</div></div>` : '';
   return `<div class="rhead">
-    ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button></div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
+    ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button>${S.media&&S.media.status==='ready'&&(S.media.thumbs||[]).some(Boolean)?`<button class="hbtn" id="pickCover">${IC.image}표지 바꾸기</button>`:''}</div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
     ${pick}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
@@ -972,9 +1013,24 @@ function switchRecipe(i){
   stopAllTimers(); clearMedia(); S.setIdx=i; S.recipe=set[i]; S.recipeSavedId=S.setSaved[i]||null; S.servings=set[i].servings; S.have={}; render();
   prepareMedia(set[i], S.setMedia?S.setMedia(set[i]):{});
 }
+async function pickCover(){
+  const m=S.media, rec=S.recipe; if (!m || m.status!=='ready') { toast('장면을 다 불러온 뒤에 고를 수 있어요'); return; }
+  const list=(m.thumbs||[]).map((u,i)=>u?{u,i}:null).filter(Boolean);
+  if (!list.length){ toast('고를 수 있는 장면이 없어요'); return; }
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet"><div class="row" style="justify-content:space-between"><h3>표지로 쓸 장면</h3><button class="x" id="pcx" aria-label="닫기">${IC.x}</button></div>
+    <p class="muted" style="margin-top:4px">완성된 음식이 잘 보이는 장면을 골라 주세요.</p>
+    <div class="cpick">${list.map(x=>`<button data-cv="${x.i}"><img src="${x.u}" alt="${x.i+1}단계 장면"><span>${x.i+1}단계</span></button>`).join('')}</div></div></div>`;
+  $('#pcx').onclick=()=>{ $('#layer').innerHTML=''; };
+  document.querySelectorAll('[data-cv]').forEach(b=>b.onclick=async()=>{
+    const c=await coverFrom(m.thumbBlobs[+b.dataset.cv]); if(!c) return;
+    rec.cover=c; if (S.recipeSavedId) storeCover(S.recipeSavedId, c);
+    $('#layer').innerHTML=''; render(); toast('표지를 바꿨어요'); });
+}
 function bindRecipe(){
+  const pc=$('#pickCover'); if(pc) pc.onclick=pickCover;
+  const vg=$('#vguide'); if(vg) vg.onclick=()=>openPlayer(firstClip());
   document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>switchRecipe(+b.dataset.pick));
-  $('#back').onclick=()=>{ stopAllTimers(); clearMedia(); S.recipe=null; render(); };
+  $('#back').onclick=()=>{ closePlayer(true); stopAllTimers(); clearMedia(); S.recipe=null; render(); };
   bindScenes($('#app'));
   $('#sm').onclick=()=>{ if(S.servings>1){S.servings--; render();} };
   $('#sp').onclick=()=>{ if(S.servings<12){S.servings++; render();} };
@@ -1012,10 +1068,10 @@ function sceneHTML(i, cook){
   if (m.status!=='ready') return '';
   const thumb=m.thumbs[i], clip=m.url && st.clip;
   if (!thumb && !clip) return '';
-  const label = clip ? `${IC.play}${mmss(st.clip.start)}~${mmss(st.clip.end)} 장면` : '';
+  const label = clip ? `${IC.play}전체 화면으로 보기` : '';
   return `<div class="scene" data-scene="${i}" ${cook&&clip?'data-auto':''}>${thumb?`<img src="${thumb}" alt="${i+1}단계 장면">`:'<div style="height:100%"></div>'}${label?`<span class="play">${label}</span>`:''}</div>`;
 }
-function bindScenes(root){ root.querySelectorAll('[data-scene]').forEach(el=>el.onclick=e=>{ if(e.target.closest('.snd')) return; playScene(el); }); }
+function bindScenes(root){ root.querySelectorAll('[data-scene]').forEach(el=>el.onclick=e=>{ if(e.target.closest('.snd')) return; if (videoSrc()) openPlayer(+el.dataset.scene); else playScene(el); }); }
 let playing=null;
 function playScene(el){
   const i=+el.dataset.scene, st=S.recipe.steps[i], m=S.media;
@@ -1033,25 +1089,33 @@ function playScene(el){
 function stopScene(el){ const v=el.querySelector('video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); } const i=+el.dataset.scene; el.outerHTML=sceneHTML(i, !!el.closest('.cook')); playing=null; bindScenes(document); }
 function mediaProgress(){ document.querySelectorAll('[data-sk] .pct').forEach(x=>x.textContent=Math.round((S.media.pct||0)*100)+'%'); }
 
+// 같은 릴스 영상은 한 번만 받는다. 분석하는 동안 미리 받기 시작하면, 결과가 나올 때 장면이 거의 바로 뜬다.
 let reelMemo=null;
-async function downloadReel(u, onPct){
-  if (reelMemo && reelMemo.u===u) return reelMemo.blob;
-  const blob=await downloadReel0(u, onPct); reelMemo={u, blob}; return blob;
-}
-async function downloadReel0(u, onPct){
-  const parts=[]; let pos=0, total=null; const CH=3*1024*1024;
-  for (let guard=0; guard<40; guard++){
-    const r=await fetch(`/api/video?u=${encodeURIComponent(u)}&k=${encodeURIComponent(S.pass||'')}`,{headers:{Range:`bytes=${pos}-${pos+CH-1}`}});
-    if (r.status===410) throw new Error('expired');
-    if (!r.ok) throw new Error('http '+r.status);
-    const b=await r.blob(); parts.push(b); pos+=b.size;
-    const cr=r.headers.get('content-range'); total = cr && /\/(\d+)/.test(cr) ? +cr.match(/\/(\d+)/)[1] : (r.status===200 ? pos : total);
-    onPct(total ? pos/total : 0);
-    if (r.status===200 || !b.size || (total && pos>=total)) break;
+function downloadReel(u, onPct){
+  if (!reelMemo || reelMemo.u!==u || reelMemo.failed){
+    const memo={u, pct:0, subs:new Set(), failed:false};
+    memo.p=downloadReel0(u, p=>{ memo.pct=p; memo.subs.forEach(f=>f(p)); }).catch(e=>{ memo.failed=true; throw e; });
+    reelMemo=memo;
   }
-  return new Blob(parts,{type:'video/mp4'});
+  if (onPct){ reelMemo.subs.add(onPct); onPct(reelMemo.pct); }
+  return reelMemo.p;
 }
-async function makeThumbs(url, steps){
+function prefetchReel(u){ try{ downloadReel(u).catch(()=>{}); }catch(e){} }
+async function downloadReel0(u, onPct){
+  const CH=2*1024*1024, url=`/api/video?u=${encodeURIComponent(u)}&k=${encodeURIComponent(S.pass||'')}`;
+  const get=async (a,b)=>{ const r=await fetch(url,{headers:{Range:`bytes=${a}-${b}`}}); if (r.status===410) throw new Error('expired'); if (!r.ok) throw new Error('http '+r.status); return r; };
+  const r0=await get(0, CH-1), first=await r0.blob();
+  const cr=r0.headers.get('content-range'), total = cr && /\/(\d+)/.test(cr) ? +cr.match(/\/(\d+)/)[1] : first.size;
+  if (r0.status===200 || first.size>=total) { onPct(1); return new Blob([first],{type:'video/mp4'}); }
+  const ranges=[]; for (let a=first.size; a<total; a+=CH) ranges.push([a, Math.min(a+CH, total)-1]);
+  const parts=new Array(ranges.length); let done=first.size, next=0; onPct(done/total);
+  const worker=async()=>{ while (next<ranges.length){ const k=next++; const [a,b]=ranges[k];
+    let blob=null; for (let t=0; t<3 && !blob; t++){ try{ blob=await (await get(a,b)).blob(); }catch(e){ if (e.message==='expired' || t===2) throw e; } }
+    parts[k]=blob; done+=blob.size; onPct(Math.min(1, done/total)); } };
+  await Promise.all([worker(), worker(), worker()]);
+  return new Blob([first, ...parts],{type:'video/mp4'});
+}
+async function makeThumbs(url, steps, coverT=null){
   const v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto'; v.src=url;
   const wait=(ev,ms=8000)=>new Promise((res,rej)=>{ const t=setTimeout(()=>rej(new Error('t')),ms); v.addEventListener(ev,()=>{clearTimeout(t);res();},{once:true}); });
   await wait('loadeddata',20000);
@@ -1063,6 +1127,7 @@ async function makeThumbs(url, steps){
     try{ v.currentTime=Math.min(Math.max(0,st.photo), Math.max(0,d-0.1)); await wait('seeked'); ctx.drawImage(v,0,0,c.width,c.height); out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.8))); }
     catch(e){ out.push(null); }
   }
+  if (coverT!=null){ try{ v.currentTime=Math.min(Math.max(0,coverT), Math.max(0,d-0.1)); await wait('seeked'); ctx.drawImage(v,0,0,c.width,c.height); out.cover=await new Promise(r=>c.toBlob(r,'image/jpeg',0.85)); }catch(e){} }
   v.removeAttribute('src'); v.load();
   return out;
 }
@@ -1072,7 +1137,7 @@ async function prepareMedia(rec, {videoBlob=null, shotBlobs=null}={}){
   const m={status:'loading', pct:0}; S.media=m;
   if (S.recipe===rec) render();
   try{
-    if (shotBlobs && !videoBlob){ m.thumbBlobs=shotBlobs; m.blob=null; return mediaReady(m); }
+    if (shotBlobs && !videoBlob){ m.thumbBlobs=shotBlobs; m.coverBlob=rec.cover_frame!=null&&S.images&&S.images[rec.cover_frame]?S.images[rec.cover_frame].blob:null; m.blob=null; return mediaReady(m); }
     let blob=videoBlob;
     if (!blob && rec.source && rec.source.videoUrl){
       try{ blob=await downloadReel(rec.source.videoUrl, p=>{ m.pct=p; mediaProgress(); }); }
@@ -1087,7 +1152,8 @@ async function prepareMedia(rec, {videoBlob=null, shotBlobs=null}={}){
     }
     if (!blob || m.dead){ m.status='none'; return; }
     m.blob=blob; m.url=URL.createObjectURL(blob);
-    m.thumbBlobs=await makeThumbs(m.url, rec.steps);
+    const th=await makeThumbs(m.url, rec.steps, rec.cover_time!=null&&!rec.cover ? toSec(rec.cover_time) : null);
+    m.thumbBlobs=[...th]; m.coverBlob=th.cover||null;
     mediaReady(m);
   }catch(e){ m.status='none'; if (S.recipe===rec && S.media===m) render(); }
 }
@@ -1597,12 +1663,80 @@ async function showUsage(){
   }catch(e){ ub.textContent=e.message||'불러오지 못했어요.'; }
 }
 
+/* ---------- 전체 화면 영상 가이드 ----------
+   세로 릴스를 화면 가득. 아래에 지금 단계 안내가 겹쳐 뜨고, 영상이 흘러가면 단계도 따라 바뀐다(실시간 가이드).
+   가로로 돌리면 왼쪽 영상, 오른쪽 안내. */
+const PL={i:0, loop:false, guide:true, v:null, follow:true};
+function videoSrc(){ const m=S.media; return m && m.url ? m.url : null; }
+const mediaLoading=()=>!!(S.media && S.media.status==='loading');
+function firstClip(){ const k=S.recipe.steps.findIndex(st=>st.clip); return k<0?0:k; }
+function stepAt(t){ const st=S.recipe.steps; let best=-1; st.forEach((x,i)=>{ if (x.clip && t>=x.clip.start-0.3 && t<=x.clip.end+0.8) best=i; }); return best; }
+function openPlayer(i){
+  const src=videoSrc(); if (!src && !mediaLoading()){ toast('이 레시피에는 볼 수 있는 영상이 없어요'); return; }
+  closePlayer(true);
+  if (playing) stopScene(playing);
+  PL.i=Math.max(0, i|0); PL.loop=false; PL.guide=true;
+  const el=document.createElement('div'); el.id='player'; el.setAttribute('role','dialog'); el.setAttribute('aria-label','영상 가이드');
+  el.innerHTML=`<video playsinline preload="auto"></video>
+    <div class="pl-top"><button id="plx" aria-label="닫기">${IC.x}</button><span id="plc"></span><button id="plm" aria-label="소리 끄기">${IC.sound}</button></div>
+    <button class="pl-tap" id="pltap" aria-label="재생/일시정지"></button>
+    <div class="pl-guide" id="plg"></div>`;
+  document.body.appendChild(el); document.body.style.overflow='hidden';
+  const v=el.querySelector('video'); PL.v=v; v.muted=false;
+  // 영상은 분석하는 동안 미리 받기 시작한다. 아직 받는 중이면 진행률을 보여 주고 끝나면 바로 재생
+  if (src) v.src=src; else waitMedia();
+  v.addEventListener('error',()=>{ $('#plc').textContent='영상을 재생하지 못했어요'; });
+  const startAt=()=>{ const st=S.recipe.steps[PL.i]; return st&&st.clip ? Math.max(0, st.clip.start-0.3) : st&&st.photo!=null ? Math.max(0, st.photo-2) : 0; };
+  v.addEventListener('loadedmetadata',()=>{ v.currentTime=startAt(); v.play().catch(()=>{ v.muted=true; syncMute(); v.play().catch(()=>{}); }); },{once:true});
+  v.addEventListener('timeupdate',()=>{
+    const st=S.recipe.steps[PL.i];
+    if (PL.loop && st && st.clip){ if (v.currentTime>st.clip.end+0.5 || v.currentTime<st.clip.start-1) v.currentTime=Math.max(0,st.clip.start-0.3); return; }
+    const k=stepAt(v.currentTime); if (k>=0 && k!==PL.i){ PL.i=k; drawGuide(); }
+  });
+  v.addEventListener('play',()=>el.classList.remove('paused')); v.addEventListener('pause',()=>el.classList.add('paused'));
+  $('#plx').onclick=()=>closePlayer();
+  $('#plm').onclick=()=>{ v.muted=!v.muted; syncMute(); };
+  $('#pltap').onclick=()=>{ if (v.paused) v.play().catch(()=>{}); else v.pause(); };
+  setAwake(true); drawGuide();
+  function waitMedia(){ const iv=setInterval(()=>{ if (!document.getElementById('player')){ clearInterval(iv); return; }
+    if (S.media && S.media.status==='none'){ clearInterval(iv); $('#plc').textContent='영상을 받지 못했어요'; return; }
+    if (S.media && S.media.url){ clearInterval(iv); v.src=S.media.url; drawGuide(); v.addEventListener('loadedmetadata',()=>{ v.currentTime=startAt(); v.play().catch(()=>{}); },{once:true}); }
+    else if (S.media) $('#plc').textContent=`영상 받는 중 ${Math.round((S.media.pct||0)*100)}%`; },500); }
+}
+function syncMute(){ const b=$('#plm'); if(!b||!PL.v) return; b.innerHTML=PL.v.muted?IC.mute:IC.sound; b.setAttribute('aria-label',PL.v.muted?'소리 켜기':'소리 끄기'); }
+function gotoStep(i){ const st=S.recipe.steps, v=PL.v; if (i<0||i>=st.length) return; PL.i=i; drawGuide();
+  const x=st[i]; if (v && (x.clip||x.photo!=null)){ v.currentTime=Math.max(0, x.clip?x.clip.start-0.3:x.photo-2); v.play().catch(()=>{}); } }
+function drawGuide(){
+  const g=$('#plg'); if(!g) return; const r=S.recipe, n=r.steps.length, i=PL.i, s=r.steps[i];
+  $('#plc').textContent=`${i+1} / ${n}단계`;
+  g.className='pl-guide'+(PL.guide?'':' min');
+  g.innerHTML=`<button class="pl-handle" id="plh" aria-label="${PL.guide?'안내 접기':'안내 펴기'}"><i></i></button>
+    <div class="pl-sn"><span class="disp">${i+1}</span>${heatHTML(s.heat)}${s.clip?'':'<span class="muted" style="color:#C9B8AC">영상에 없는 단계</span>'}</div>
+    <div class="pl-st">${stepHTML(s.text)}</div>
+    ${PL.guide&&s.cue?`<div class="cue"><span>${esc(s.cue)}</span></div>`:''}
+    ${PL.guide&&s.tip?`<div class="tip"><span>${esc(s.tip)}</span></div>`:''}
+    ${s.seconds>0?`<div class="timer" data-timer="${i}">${IC.clock}<span class="tm">${mmss(s.seconds)}</span><button data-tstart="${i}">시작</button></div>`:''}
+    <div class="pl-nav"><button class="btn prev" id="plp" ${i===0?'disabled':''}>이전</button>
+      <button class="btn ${PL.loop?'on':''}" id="pll" aria-pressed="${PL.loop}">${PL.loop?'반복 중':'이 단계 반복'}</button>
+      <button class="btn pri" id="pln" ${i===n-1?'disabled':''}>다음</button></div>`;
+  $('#plh').onclick=()=>{ PL.guide=!PL.guide; drawGuide(); };
+  $('#plp').onclick=()=>gotoStep(PL.i-1); $('#pln').onclick=()=>gotoStep(PL.i+1);
+  $('#pll').onclick=()=>{ PL.loop=!PL.loop; if (PL.loop) gotoStep(PL.i); else drawGuide(); };
+  g.querySelectorAll('[data-tstart]').forEach(b=>b.onclick=()=>toggleTimer(+b.dataset.tstart)); refreshTimerUI();
+}
+function closePlayer(silent){ const el=document.getElementById('player'); if(!el) return;
+  const v=el.querySelector('video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); }
+  const i=PL.i; el.remove(); PL.v=null; document.body.style.overflow='';
+  if (!silent && S.cooking && i!==cookIdx){ cookIdx=i; drawCook(); }
+  setAwake(S.busy || !!S.recipe || S.cooking); }
+
 /* ---------- 안드로이드 뒤로가기: 앱 안에서 한 단계씩 ----------
    방법: 히스토리에 "가드" 한 칸을 깔아 두고, 뒤로가기가 오면 앱 화면을 한 단계 되돌린 뒤 가드를 다시 깐다.
    첫 화면에서는 "한 번 더 누르면 종료" 안내 후 2초 안에 다시 누르면 종료. */
 let backAt=0, guardTimer=null;
 function pushGuard(){ if (!history.state || !history.state.rcGuard) history.pushState({rcGuard:1}, ''); }
 function handleBack(){
+  if (document.getElementById('player')){ closePlayer(); return true; }
   const top=[...document.querySelectorAll('body > .modal')].pop();       // 약관 보기·AI 사용량 창
   if (top){ top.remove(); return true; }
   if (!$('#gate').classList.contains('hidden')) return false;            // 동의 화면에서는 종료 안내
