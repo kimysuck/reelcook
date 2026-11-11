@@ -7,7 +7,9 @@ import { fetchInstagram, shortcodeOf } from '../lib/instagram.js';
 export const config = { maxDuration: 300 };
 
 // 모델은 자주 바뀌므로: 환경변수 GEMINI_MODEL이 있으면 그것을 먼저, 실패하면 다음 후보로 자동 전환
-const MODELS = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash'].filter(Boolean))];
+const MODELS = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.5-flash'].filter(Boolean))];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const BUSY = /high demand|overloaded|unavailable|try again later|resource.?exhausted/i;
 const MAX_IMAGES = 8;
 const MAX_IMAGE_B64 = 1_500_000; // 이미지 1장당 약 1.1MB까지
 
@@ -89,12 +91,23 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig }),
       });
-      let r = await call(fast);
-      let data = await r.json().catch(() => ({}));
+      let r, data;
+      // 붐빔(503) 대비: 같은 모델로 최대 2번(1.5초, 4초 후) 재시도 → 그래도 붐비면 다음 모델
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await sleep(attempt === 1 ? 1500 : 4000);
+        r = await call(fast);
+        data = await r.json().catch(() => ({}));
+        if (!(r.status === 503 || r.status === 500 || (r.status !== 200 && BUSY.test(data?.error?.message || '')))) break;
+        console.warn('Gemini busy', model, r.status, 'attempt', attempt + 1);
+      }
       if (r.status === 400 && /thinking|media_?resolution|Unknown name|Invalid value/i.test(data?.error?.message || '')) {
         console.warn('fast options rejected, retrying plain:', data?.error?.message);
         r = await call({ responseMimeType: 'application/json' });
         data = await r.json().catch(() => ({}));
+      }
+      if (r.status === 503 || r.status === 500 || (r.status !== 200 && r.status !== 429 && BUSY.test(data?.error?.message || ''))) {
+        lastErr = { status: r.status, message: data?.error?.message || '', busy: true };
+        continue; // 다음 모델로
       }
       if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
       if (!r.ok) {
@@ -109,6 +122,7 @@ export default async function handler(req, res) {
       if (!text) return res.status(502).json({ error: 'empty_answer' });
       return res.status(200).json({ text, model, source });
     }
+    if (lastErr?.busy) return res.status(503).json({ error: 'busy' });
     return res.status(502).json({ error: 'gemini', status: lastErr?.status, message: lastErr?.message || '' });
   } catch (e) {
     console.error(e);
