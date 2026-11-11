@@ -265,7 +265,7 @@ body.detail nav.tabs{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION = 'v0.9';
+const VERSION = 'v0.9.1';
 // 시작 애니메이션: 약 1.3초 뒤 사라짐 (공유로 열렸으면 짧게, 누르면 바로)
 (function(){ const sp=document.getElementById('splash'); if(!sp) return;
   const quick=/[?&]share/.test(location.search); const end=()=>{ sp.classList.add('out'); setTimeout(()=>sp.remove(),400); };
@@ -1066,7 +1066,7 @@ async function saveProfile(){
   else if (prof.mode==='google') body.useGoogle=true;
   else if (prof.mode==='none') body.clearAvatar=true;
   const {r,data}=await authApi('/api/profile', body);
-  if (!r.ok){ btn.disabled=false; btn.textContent='다시 시도'; $('#pferr').innerHTML=`<div class="err">${esc(MOD_ERR[data.error]||'저장하지 못했어요')}${data.reason?` (${esc(data.reason)})`:''}</div>`; return; }
+  if (!r.ok){ btn.disabled=false; btn.textContent='다시 시도'; $('#pferr').innerHTML=`<div class="err">${esc(MOD_ERR[data.error]||('저장하지 못했어요 ('+(data.error||r.status)+')'))}${data.reason?` (${esc(data.reason)})`:''}${data.detail?`<div style="font-size:.78rem;margin-top:6px;opacity:.8">원인: ${esc(data.detail)}</div>`:''}</div>`; return; }
   S.profile=data.profile; $('#layer').innerHTML=''; renderWho();
   if (data.flagged) toast('🚫 사진이 부적절하다고 판단되어 모자이크 처리됐어요'); else toast('프로필을 저장했어요');
   S.feed=null; if (!S.recipe && !S.busy) render();
@@ -1192,7 +1192,7 @@ async function submitPost(){
     const body={kind:comp.kind, title, body:$('#px').value.trim(), taste:comp.taste||0, recipe: recipe?JSON.parse(JSON.stringify(recipe)):null};
     if (cook){ body.photo=await blobToB64(comp.blob); body.mosaic=await blobToB64(await mosaicOf(comp.blob)); }
     const {r,data}=await authApi('/api/post', body);
-    if (!r.ok) throw new Error((MOD_ERR[data.error]||'올리지 못했어요')+(data.reason?` (${data.reason})`:''));
+    if (!r.ok) throw new Error((MOD_ERR[data.error]||('올리지 못했어요 ('+(data.error||r.status)+')'))+(data.reason?` (${data.reason})`:'')+(data.detail?` — 원인: ${data.detail}`:''));
     $('#layer').innerHTML=''; stopAllTimers(); clearMedia(); S.recipe=null; S.tab='feed'; S.feedFilter='all'; S.feed=null; render();
     toast(data.flagged ? '🚫 사진이 부적절하다고 판단되어 모자이크 처리됐어요' : '🔥 피드에 올렸어요!');
   }catch(e){ btn.disabled=false; btn.textContent='다시 올리기'; err(e.message||'올리지 못했어요'); }

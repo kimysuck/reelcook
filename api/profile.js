@@ -49,6 +49,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ profile, flagged, reason: flagged ? verdict.reason : '' });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: 'save_failed' });
+    return res.status(500).json({ error: 'save_failed', detail: String(e.message || e).slice(0, 220) });
   }
 }
