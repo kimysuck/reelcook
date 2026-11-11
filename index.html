@@ -373,6 +373,21 @@ body.detail nav.tabs{display:none}
 @keyframes on{to{background:var(--c)}}
 @media (prefers-reduced-motion: reduce){#splash *{animation-duration:.01s!important;animation-delay:0s!important}}
 
+.pick{margin-top:14px}
+.pk-h{font-size:.84rem;font-weight:700;color:var(--ink2)}
+.pk{display:flex;gap:8px;overflow-x:auto;margin:8px -20px 0;padding:0 20px 4px;scrollbar-width:none}
+.pk::-webkit-scrollbar{display:none}
+.pk button{flex-shrink:0;display:inline-flex;align-items:center;gap:7px;min-height:42px;padding:0 14px 0 6px;border:1.5px solid var(--line);border-radius:21px;font-size:.92rem;background:var(--paper);max-width:76vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pk button .n{width:28px;height:28px;border-radius:50%;background:var(--line2);display:inline-flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:.95rem;flex-shrink:0}
+.pk button.on{border-color:var(--pri);color:var(--pri);font-weight:700}
+.pk button.on .n{background:var(--pri);color:#fff}
+.pk button .ic{width:16px;height:16px}
+.usage{width:100%;border-collapse:collapse;font-size:.84rem;margin-top:10px;font-variant-numeric:tabular-nums}
+.usage th,.usage td{padding:8px 4px;border-bottom:1px solid var(--line2);text-align:right}
+.usage th:first-child,.usage td:first-child{text-align:left}
+.usage th{font-size:.76rem;color:var(--sub);font-weight:700}
+.usage tr.ex td{color:var(--hot)}
+
 /* 약관 동의 화면 */
 #gate{position:fixed;inset:0;z-index:350;background:var(--bg);overflow:auto}
 #gate .in{max-width:560px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom))}
@@ -427,7 +442,7 @@ body.detail nav.tabs{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.2';
+const VERSION='v1.3';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -693,12 +708,14 @@ async function api(path, body){
 }
 const ERR = {
   passcode:'앱 비밀번호가 맞지 않아요. 설정에서 다시 입력해 주세요.',
-  rate_limited:'AI 무료 사용량을 잠시 초과했어요. 1분 뒤 다시 시도해 주세요.',
-  busy:'AI 서버가 붐벼요. 1~2분 뒤에 다시 공유해 주세요.',
+  rate_limited:'모든 AI 모델이 무료 사용량 속도 제한에 걸렸어요. 1~2분 뒤 다시 시도해 주세요.',
+  quota_day:'오늘 쓸 수 있는 AI 무료 사용량을 모두 썼어요.',
+  busy:'지금 Google AI 모델이 모두 붐벼요. 1~2분 뒤에 다시 시도해 주세요.',
   no_key:'서버에 GEMINI_API_KEY가 없어요. (Vercel 환경변수 확인)',
   bad_image:'사진 형식이나 크기를 처리하지 못했어요.',
   empty_answer:'AI가 답을 비워서 보냈어요. 한 번만 다시 시도해 주세요.',
 };
+const kst=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } };
 let tick=null;
 // 스트리밍 요청: 서버가 진행 상황과 5초마다 신호를 보내 연결이 끊기지 않게 한다
 async function streamAnalyze(body, onEvent){
@@ -732,27 +749,34 @@ async function analyze(opts={}){
       else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; render(); }
       else if (ev.stage==='download'){ S.phase='download'; render(); }
       else if (ev.stage==='analyze'){ S.phase='analyze'; S.fetched={...(S.fetched||{}), visualOnly:ev.visualOnly, longVideo:ev.longVideo, gotVideo:ev.gotVideo, videoMB:ev.videoMB}; render(); }
-      else if (ev.stage==='busy'){ S.note2='AI 서버가 붐벼서 다시 시도하는 중…'; render(); }
-      else if (ev.stage==='retry'){ S.note2='첫 결과가 부족해서 더 꼼꼼하게 다시 보는 중…'; render(); }
+      else if (ev.stage==='busy'){ S.note2='AI 모델이 잠시 붐벼서 한 번 더 시도하는 중…'; render(); }
+      else if (ev.stage==='switch'){ S.note2={busy:'이 AI 모델이 붐벼서 다른 모델로 바꿔 분석하는 중…', quota:'이 모델의 분당 무료 사용량이 차서 다른 모델로 바꾸는 중…', day:'이 모델의 오늘 무료 한도가 끝나서 다른 모델로 바꾸는 중…'}[ev.why]||'다른 AI 모델로 바꾸는 중…'; render(); }
+      else if (ev.stage==='wait'){ S.note2=`무료 사용량 속도 제한 때문에 ${ev.sec}초 기다렸다가 이어서 분석해요…`; render(); }
+      else if (ev.stage==='retry'){ S.note2='레시피를 확실히 찾지 못해서 영상 자막과 음성까지 더 꼼꼼하게 다시 보는 중…'; render(); }
     });
     if (data.error || (data.status && data.status!==200)){
       if (data.error==='need_input'){ S.shareNote='link'; throw new Error('이 릴스의 캡션과 영상을 가져오지 못했어요. 비공개 계정이거나 일시적인 문제일 수 있어요.'); }
       if (data.error==='too_long'){ S.canRetry=true; throw new Error('영상이 길어서 시간 안에 분석을 끝내지 못했어요. 다시 시도하거나, 캡션을 붙여넣어 주세요.'); }
-      if (data.error==='busy') S.canRetry=true;
+      if (data.error==='busy'||data.error==='rate_limited') S.canRetry=true;
+      if (data.error==='quota_day') throw new Error(`${ERR.quota_day} ${data.resetAt?kst(data.resetAt)+'에 다시 채워져요.':''} 설정 > AI 사용량에서 확인할 수 있어요.`);
       throw new Error(ERR[data.error] || `분석 서버 오류 (${data.error||data.status}${data.message?': '+data.message:''})`);
     }
-    const rec=normalize(parseJSON(data.text));
-    if (!rec.ingredients.length) throw new Error('이 영상에서 레시피를 찾지 못했어요. 요리 과정이 나오는 릴스인지 확인해 주세요.');
-    const src=data.source||{};
-    rec.source={cached:!!src.cached, link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null};
+    const res=parseJSON(data.text), list=(Array.isArray(res.recipes)?res.recipes:[res]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
+    if (!list.length) throw new Error(res.is_food===false ? `요리를 만드는 릴스가 아닌 것 같아요${res.reason?` (${res.reason})`:''}. 요리 과정이 나오는 릴스를 공유해 주세요.` : '이 릴스에서 레시피를 찾지 못했어요. 캡션을 직접 붙여넣거나 다른 릴스로 시도해 주세요.');
+    const src=data.source||{}, ev=res.evidence||{};
+    const base={cached:!!src.cached, link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
+    const set=list.map(r=>{ const rec=normalize(r); rec.source={...base}; return rec; });
     // 갤러리 영상/스크린샷으로 분석한 경우: 이미지 번호 → 장면
-    let localVideo=null, shots=null;
+    let localVideo=null, useShots=false;
     if (S.fromVideo && S.videoBlob && S.frameTimes){ localVideo=S.videoBlob;
-      rec.steps.forEach(st=>{ if (st.frame!=null && S.frameTimes[st.frame]!=null && st.photo==null){ st.photo=S.frameTimes[st.frame]; st.clip={start:Math.max(0,st.photo-2), end:st.photo+2}; } }); }
-    else if (S.images.length){ shots=rec.steps.map(st=> st.frame!=null && S.images[st.frame] ? S.images[st.frame].blob : null); }
+      set.forEach(rec=>rec.steps.forEach(st=>{ if (st.frame!=null && S.frameTimes[st.frame]!=null && st.photo==null){ st.photo=S.frameTimes[st.frame]; st.clip={start:Math.max(0,st.photo-2), end:st.photo+2}; } })); }
+    else if (S.images.length) useShots=true;
+    const imgs=S.images.slice();
     S.busy=false; clearInterval(tick); S.t0=0;
-    openRecipe(rec, null);
-    prepareMedia(rec, {videoBlob:localVideo, shotBlobs:shots});
+    S.setMedia=rec=>({videoBlob:localVideo, shotBlobs: useShots ? rec.steps.map(st=> st.frame!=null && imgs[st.frame] ? imgs[st.frame].blob : null) : null});
+    openRecipe(set[0], null, set);
+    prepareMedia(set[0], S.setMedia(set[0]));
+    if (set.length>1) toast(`이 릴스에서 레시피 ${set.length}개를 찾았어요`);
   }catch(e){
     const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
     if (net){ S.canRetry=true; S.error='인터넷 연결이 중간에 끊겼어요. 와이파이·데이터 상태를 확인하고 다시 시도해 주세요.'; }
@@ -783,7 +807,7 @@ function viewProgress(){
     : S.phase==='cached' ? '이미 정리된 릴스예요. 바로 불러올게요'
     : S.phase==='fetch' ? '릴스를 가져오는 중'
     : S.phase==='download' ? '영상을 받는 중'
-    : f && f.visualOnly ? '글 설명이 없어서 화면을 꼼꼼히 보는 중'
+    : f && f.visualOnly ? '영상 속 자막과 음성까지 꼼꼼히 읽는 중'
     : f && f.gotVideo ? '영상과 캡션을 같이 읽는 중' : '레시피로 정리하는 중';
   const hint = S.phase==='fetch' ? '보통 10~30초 걸려요'
     : f && f.longVideo ? '긴 영상이라 1~2분 걸릴 수 있어요'
@@ -791,7 +815,7 @@ function viewProgress(){
   let checks='';
   if (f) checks=`<div class="checks">
     ${f.caption===undefined?'':(f.caption?`<div class="ok">${IC.check}캡션을 읽었어요</div>`:`<div class="no">${IC.minus}캡션이 없어서 화면으로 분석해요</div>`)}
-    ${f.comments&&f.comments.length?`<div class="ok">${IC.check}작성자 댓글 ${f.comments.length}개를 읽었어요</div>`:''}
+    ${f.comments&&f.comments.length?(()=>{ const o=f.comments.filter(c=>/^작성자: /.test(c)).length, v=f.comments.length-o; return `<div class="ok">${IC.check}댓글을 읽었어요 (${[o?`작성자 ${o}개`:'',v?`시청자 ${v}개`:''].filter(Boolean).join(', ')})</div>`; })():''}
     ${f.videoUrl===undefined?'':(f.videoUrl?`<div class="ok">${IC.check}영상을 받았어요${f.duration?` (${Math.round(f.duration)}초)`:''}</div>`:`<div class="no">${IC.alert}영상을 못 받아서 글로만 분석해요</div>`)}</div>
     ${f.caption?`<div class="cap-peek">${esc(f.caption.slice(0,240))}</div>`:''}`;
   return `<div class="prog">${gauge(0)}
@@ -857,9 +881,11 @@ function bindImport(){
 }
 
 /* ---------- 레시피 상세 ---------- */
-function openRecipe(r, savedId){ clearMedia(); S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
+function openRecipe(r, savedId, set){ clearMedia(); S.recipeSet=set&&set.length>1?set:null; S.setIdx=0; S.setSaved={}; if(!S.recipeSet) S.setMedia=null; S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
 function k(){ return S.servings / S.recipe.servings; }
 function stepHTML(text){ const r=S.recipe; return esc(text).replace(/\[\[(\d+)\]\]/g,(m,i)=>{ const ing=r.ingredients[+i]; if(!ing) return ''; const a=amountOf(ing,k()); return `<b>${esc(ing.name)} ${esc(a.big==='적당량'||a.big==='약간'?'약간':a.big)}</b>`; }); }
+const SRC_NAME={caption:'캡션', owner_comment:'작성자 댓글', viewer_comment:'시청자 댓글(추정에만)', onscreen_text:'화면 자막', speech:'음성 설명', visual:'화면 장면'};
+function srcText(r){ return [...new Set((Array.isArray(r.sources)?r.sources:[]).map(x=>SRC_NAME[x]).filter(Boolean))].join(', '); }
 function heatCls(h){ return h==='약불'?'h1':h==='중불'?'h2':h==='강불'?'h3':'h0'; }
 function mmss(s){ s=Math.max(0,Math.round(s)); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 const BASIC = /^(물|소금|후추|후춧가루|설탕|식용유|올리브유|간장|진간장|참기름|들기름|다진\s?마늘|깨|통깨|참깨|식초|맛술|미림|청주)$/;
@@ -911,11 +937,13 @@ function viewRecipe(){
   }
   const src=r.source||{};
   const conf = r.confidence==='low'?'<span class="chip warn">추정이 많아요</span>':r.confidence==='medium'?'<span class="chip warn">일부 추정</span>':'';
+  const pick = S.recipeSet ? `<div class="pick"><div class="pk-h">이 릴스에 레시피가 ${S.recipeSet.length}개 있어요</div><div class="pk">${S.recipeSet.map((x,i)=>`<button data-pick="${i}" class="${i===S.setIdx?'on':''}" aria-pressed="${i===S.setIdx}"><span class="n">${i+1}</span>${esc(x.title)}${S.setSaved[i]?` ${IC.saved}`:''}</button>`).join('')}</div></div>` : '';
   return `<div class="rhead">
     ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button></div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
+    ${pick}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
-    <div class="ailabel"><b>AI 정리</b><span>AI가 릴스를 보고 만든 레시피예요. 분량, 시간, 영양은 틀릴 수 있어요.</span></div>
+    <div class="ailabel"><b>AI 정리</b><span>AI가 릴스를 보고 만든 레시피예요. 분량, 시간, 영양은 틀릴 수 있어요.${srcText(r)?`<br>근거: ${srcText(r)}`:''}</span></div>
     <div class="meta"><span>${IC.clock}${esc(r.total_min||'?')}분</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}${conf}${src.cached?'<span>저장된 분석</span>':''}</div>
     ${r.assumptions.length&&r.confidence!=='high'?`<div class="note" style="margin-top:14px">${r.assumptions.map(esc).join('<br>')}</div>`:''}
     ${src.caption||(src.comments&&src.comments.length)||src.link?`<details class="origin"><summary>원본 캡션과 댓글${IC.down}</summary><div class="body">
@@ -935,7 +963,13 @@ function viewRecipe(){
     <button class="btn pri" id="cookBtn">요리 시작</button>
   </div></div>`;
 }
+function switchRecipe(i){
+  const set=S.recipeSet; if(!set||!set[i]||i===S.setIdx) return;
+  stopAllTimers(); clearMedia(); S.setIdx=i; S.recipe=set[i]; S.recipeSavedId=S.setSaved[i]||null; S.servings=set[i].servings; S.have={}; render();
+  prepareMedia(set[i], S.setMedia?S.setMedia(set[i]):{});
+}
 function bindRecipe(){
+  document.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>switchRecipe(+b.dataset.pick));
   $('#back').onclick=()=>{ stopAllTimers(); clearMedia(); S.recipe=null; render(); };
   bindScenes($('#app'));
   $('#sm').onclick=()=>{ if(S.servings>1){S.servings--; render();} };
@@ -995,7 +1029,12 @@ function playScene(el){
 function stopScene(el){ const v=el.querySelector('video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); } const i=+el.dataset.scene; el.outerHTML=sceneHTML(i, !!el.closest('.cook')); playing=null; bindScenes(document); }
 function mediaProgress(){ document.querySelectorAll('[data-sk] .pct').forEach(x=>x.textContent=Math.round((S.media.pct||0)*100)+'%'); }
 
+let reelMemo=null;
 async function downloadReel(u, onPct){
+  if (reelMemo && reelMemo.u===u) return reelMemo.blob;
+  const blob=await downloadReel0(u, onPct); reelMemo={u, blob}; return blob;
+}
+async function downloadReel0(u, onPct){
   const parts=[]; let pos=0, total=null; const CH=3*1024*1024;
   for (let guard=0; guard<40; guard++){
     const r=await fetch(`/api/video?u=${encodeURIComponent(u)}&k=${encodeURIComponent(S.pass||'')}`,{headers:{Range:`bytes=${pos}-${pos+CH-1}`}});
@@ -1137,7 +1176,7 @@ async function saveRecipe(){
     if (!LS.set('rc_recipes', local)){ toast('저장 공간이 부족해요'); return; }
   }
   S.my.unshift({id, recipe:rec, savedAt:Date.now()});
-  S.recipeSavedId=id; toast(sb&&S.user?'저장했어요. 계정에 동기화돼요':'내 레시피에 저장했어요'); render();
+  S.recipeSavedId=id; if(S.recipeSet) S.setSaved[S.setIdx]=id; toast(sb&&S.user?'저장했어요. 계정에 동기화돼요':'내 레시피에 저장했어요'); render();
   persistMedia(id);
 }
 function reelCode(link){ const m=String(link||'').match(/instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:reel|reels|p|tv)\/([A-Za-z0-9_-]{5,})/i); return m?m[1]:null; }
@@ -1445,12 +1484,14 @@ $('#setBtn').onclick=()=>{
     <label class="fl">앱 비밀번호</label>
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
+    <label class="fl">AI 사용량</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>
     <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
     <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ S.fs=b.dataset.fs; LS.set('rc_fs',S.fs); applyFs(); document.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
   document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ S.theme=b.dataset.th; LS.set('rc_theme',S.theme); applyTheme(); document.querySelectorAll('[data-th]').forEach(x=>x.classList.toggle('on',x===b)); });
   document.querySelectorAll('.legal [data-doc]').forEach(b=>b.onclick=()=>showDoc(b.dataset.doc));
   $('#wd').onclick=withdraw;
+  $('#usageBtn').onclick=showUsage;
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -1460,8 +1501,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-11';
-const TERMS_CHANGES='';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-12';
+const TERMS_CHANGES='레시피를 찾는 방식(화면 자막·음성·댓글 판별, 여러 레시피 정리)과 AI 사용량 기록 내용을 더했어요.';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -1493,7 +1534,7 @@ function showGate(){
       ${item('privacy','개인정보 수집·이용','privacy',`<table class="sumtbl"><tr><th>항목</th><th>목적</th><th>보관</th></tr>
         <tr><td>구글 계정 이메일·이름, 닉네임, 프로필 사진</td><td>로그인, 피드 작성자 표시</td><td>탈퇴할 때까지</td></tr>
         <tr><td>게시물, 저장한 레시피</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
-        <tr><td>릴스 링크, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr></table>
+        <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr></table>
         <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
     </div>
     <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
@@ -1526,6 +1567,30 @@ function withdraw(){
       location.replace('/');
     }catch(e){ toast('삭제하지 못했어요: '+(e.message||e)); }
   }, member?'탈퇴':'삭제');
+}
+
+/* ---------- AI 사용량 ---------- */
+async function showUsage(){
+  const box=document.createElement('div'); box.className='modal'; box.style.zIndex=70;
+  box.innerHTML=`<div class="sheet"><div class="row" style="justify-content:space-between"><h3>오늘 AI 사용량</h3><button class="x" aria-label="닫기">${IC.x}</button></div><div id="ub" class="muted" style="margin-top:12px">불러오는 중…</div></div>`;
+  document.body.appendChild(box); box.querySelector('.x').onclick=()=>box.remove();
+  const ub=box.querySelector('#ub');
+  try{
+    const r=await fetch('/api/usage',{headers:S.pass?{'x-app-passcode':S.pass}:{}}); const d=await r.json();
+    if (!r.ok) throw new Error(d.error==='passcode'?'앱 비밀번호가 맞지 않아요.':'불러오지 못했어요.');
+    const byM=Object.fromEntries((d.rows||[]).map(x=>[x.model,x])), short=m=>m.replace(/^gemini-/,'');
+    const cache=byM.cache;
+    const rows=d.models.map(m=>{ const x=byM[m]||{calls:0,ok:0,busy:0,limited:0,tin:0,tout:0};
+      return `<tr class="${x.exhausted?'ex':''}"><td>${esc(short(m))}${x.exhausted?' (오늘 소진)':''}</td><td>${x.calls}</td><td>${x.ok}</td><td>${x.busy}</td><td>${x.limited}</td><td>${Math.round(((x.tin||0)+(x.tout||0))/1000)}k</td></tr>`; }).join('');
+    const total=(d.rows||[]).filter(x=>x.model!=='cache').reduce((a,x)=>a+x.ok,0);
+    ub.className=''; ub.innerHTML=`
+      <p style="font-size:.95rem">오늘 성공한 AI 요청 <b>${total}회</b>${cache?`, 저장된 분석으로 바로 보여준 것 <b>${cache.calls}회</b>(무료 사용량 안 씀)`:''}</p>
+      <table class="usage"><tr><th>모델</th><th>요청</th><th>성공</th><th>붐빔</th><th>한도</th><th>토큰</th></tr>${rows}</table>
+      <p class="muted" style="font-size:.8rem;margin-top:12px">무료 한도는 모델마다 따로 있어서, 한 모델이 붐비거나 한도가 차면 아래 모델로 자동으로 넘어가요. 하루 한도는 ${kst(d.resetAt)}에 다시 채워져요.</p>
+      <p class="muted" style="font-size:.8rem;margin-top:6px">Google은 정확한 무료 한도 숫자를 API로 알려주지 않아요. 모델별 한도와 남은 양은 AI Studio에서 볼 수 있어요.</p>
+      ${d.tracking&&!(d.rows||[]).length?'<div class="note" style="margin-top:10px">아직 기록이 없어요. Supabase에서 update-v1.3.sql을 실행했는지 확인해 주세요.</div>':''}
+      <a class="btn ghost" style="width:100%;margin-top:14px;text-decoration:none" href="${esc(d.studio)}" target="_blank" rel="noopener">AI Studio에서 한도 보기</a>`;
+  }catch(e){ ub.textContent=e.message||'불러오지 못했어요.'; }
 }
 
 /* ================= 시작 ================= */
