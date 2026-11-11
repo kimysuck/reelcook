@@ -8,6 +8,8 @@ export default async function handler(req, res) {
   const r = await fetchInstagram(String(req.query.url || ''));
   res.status(200).json({
     code: r.code,
+    via: r.via,
+    apifyConfigured: !!process.env.APIFY_TOKEN,
     captionFound: !!r.caption,
     captionPreview: r.caption.slice(0, 300),
     videoFound: !!r.videoB64,

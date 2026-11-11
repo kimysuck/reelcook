@@ -16,8 +16,12 @@
 | `GEMINI_API_KEY` | ✅ | Google AI Studio에서 발급한 키 (`AIza…`) |
 | `APP_PASSCODE` | 권장 | 아무 비밀번호. 앱 ⚙️ 설정에 같은 값 입력 |
 | `GEMINI_MODEL` | 선택 | 기본 `gemini-2.5-flash` |
+| `APIFY_TOKEN` | 자동 분석에 필요 | Apify API 토큰. 인스타가 Vercel 서버 IP를 막기 때문에 대행 서비스로 릴스 캡션·영상을 가져옴 |
 
 환경변수를 바꾼 뒤에는 **Redeploy** 해야 반영됩니다.
+
+## 진단
+`/api/ig-test?pass=<APP_PASSCODE>&url=<릴스링크>` → 캡션·영상을 가져왔는지와 실패 원인(notes)을 보여줍니다.
 
 ## 단계
 - [x] 1단계: PWA + 공유받기 + Gemini 분석 (영상은 장면 6장 추출)
