@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#D23B1F">
+<script>(function(){try{var t=JSON.parse(localStorage.getItem('rc_theme')||'"base"');if(t==='auto')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'base';if(t!=='base')document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <title>릴쿡 — 릴스를 레시피로</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png">
@@ -35,6 +36,29 @@ a{color:inherit}
 .hidden{display:none!important}
 svg.ic{width:1.25em;height:1.25em;flex-shrink:0;vertical-align:-.22em}
 .disp{font-family:var(--disp);font-weight:400;letter-spacing:-.01em}
+
+/* 테마: 밝게 — 흰 머리띠, 토마토색 버튼, 연한 노른자 */
+html[data-theme=bright]{--pri:#F2552C;--pri-d:#D9441D;--pri-t:#FFEDE6;--hot:#F2552C;--hot-t:#FFEDE6;--ink:#3A2A22;--ink2:#6A574C;--yolk:#FFC93C;--yolk-t:#FFF5D6;--herb:#4FA046;--herb-t:#ECF7E6;--f3:#F2552C}
+html[data-theme=bright] header.top{background:#fff;color:var(--pri);border-bottom:3px solid var(--yolk)}
+html[data-theme=bright] .pill{color:var(--ink2)}
+html[data-theme=bright] header .gauge i{background:var(--line)!important}
+html[data-theme=bright] header .gauge.g3 i:nth-child(1){background:var(--f1)!important}html[data-theme=bright] header .gauge.g3 i:nth-child(2){background:var(--f2)!important}html[data-theme=bright] header .gauge.g3 i:nth-child(3){background:var(--f3)!important}
+html[data-theme=bright] header :focus-visible{outline-color:var(--pri)}
+/* 테마: 다크 — 숯불 앞처럼 어둡게, 빨강은 밝혀서 대비 확보 */
+html[data-theme=dark]{color-scheme:dark;--bg:#17110E;--paper:#221A16;--ink:#F6EDE6;--ink2:#D4C3B7;--sub:#A8968A;--line:#3A2E28;--line2:#2B221D;--pri:#E9502F;--pri-d:#FF7A5C;--pri-t:#3A1F18;--hot:#FF6B4A;--hot-t:#3A1F18;--yolk-d:#FFC94D;--yolk-t:#3A2C10;--herb:#7CC46A;--herb-t:#1E2E1A}
+html[data-theme=dark] header.top{background:#241B17;color:var(--hot);border-bottom:1px solid var(--line)}
+html[data-theme=dark] .pill{color:var(--ink2)}
+html[data-theme=dark] header .gauge i{background:var(--line)!important}
+html[data-theme=dark] header .gauge.g3 i:nth-child(1){background:var(--f1)!important}html[data-theme=dark] header .gauge.g3 i:nth-child(2){background:var(--f2)!important}html[data-theme=dark] header .gauge.g3 i:nth-child(3){background:var(--f3)!important}
+html[data-theme=dark] .ratio,html[data-theme=dark] .hero .back,html[data-theme=dark] .av,html[data-theme=dark] .avpick .big{color:#2B1E18!important}
+html[data-theme=dark] .toast{background:#F6EDE6;color:#17110E}
+html[data-theme=dark] .err{color:#FFB4A3} html[data-theme=dark] .note{color:#FFD98A} html[data-theme=dark] .note.ok{color:#A9DE9B}
+html[data-theme=dark] .stx b{background:linear-gradient(transparent 58%, rgba(255,184,28,.38) 58%)}
+html[data-theme=dark] .ing .dots{border-color:#5A4A40} html[data-theme=dark] .drop{border-color:#5A4A40}
+html[data-theme=dark] .opt button.on,html[data-theme=dark] .tabs2 button.on{color:var(--bg)}
+html[data-theme=dark] .pic{filter:brightness(.92)}
+html[data-theme=dark] .shop.have .nm{color:#6E5E55}
+html[data-theme=dark] .modal{background:rgba(0,0,0,.6)}
 
 /* 머리 · 아래 탭 */
 header.top{position:sticky;top:0;z-index:20;background:var(--pri);color:#fff;padding-top:env(safe-area-inset-top)}
@@ -317,23 +341,76 @@ body.detail nav.tabs{display:none}
 .avpick .big img{width:100%;height:100%;object-fit:cover}
 .guard{display:flex;gap:8px;align-items:flex-start;font-size:.8rem;color:var(--sub);margin-top:12px}
 
-/* 시작 화면: 글자가 놓이고, 불이 한 칸씩 켜진다 */
-#splash{position:fixed;inset:0;z-index:400;background:var(--pri);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .3s ease, visibility .3s}
+/* 시작 화면: 세로 릴스가 재생되고 → 레시피 카드로 변신 → 릴쿡 글자와 불 게이지 */
+#splash{position:fixed;inset:0;z-index:400;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;transition:opacity .35s ease, visibility .35s}
 #splash.out{opacity:0;visibility:hidden}
-#splash .w{font-family:var(--disp);font-size:5rem;line-height:1;letter-spacing:-.03em;display:flex}
-#splash .ch{display:inline-block;opacity:0;transform:translateY(-28px);animation:drop .42s cubic-bezier(.3,1.5,.5,1) forwards}
-#splash .ch:nth-child(2){animation-delay:.14s}
-#splash .gauge{height:40px;gap:8px;margin-top:22px}
-#splash .gauge i{width:13px;border-radius:3px;background:rgba(255,255,255,.28);animation:on .2s ease forwards}
-#splash .gauge i:nth-child(1){--c:#FFE08A}#splash .gauge i:nth-child(2){--c:var(--yolk)}#splash .gauge i:nth-child(3){--c:#fff}
-#splash .gauge i:nth-child(1){animation-delay:.55s}#splash .gauge i:nth-child(2){animation-delay:.72s}#splash .gauge i:nth-child(3){animation-delay:.89s}
+#splash .stage{display:flex;flex-direction:column;align-items:center}
+#splash .card{position:relative;width:84px;height:150px;border:3px solid #fff;border-radius:16px;overflow:hidden;opacity:0;transform:scale(.7);
+  animation:pop .35s cubic-bezier(.3,1.4,.5,1) forwards, morph .45s cubic-bezier(.6,0,.3,1) .95s forwards}
+#splash .play{position:absolute;left:50%;top:50%;margin:-13px 0 0 -8px;border-left:22px solid #fff;border-top:13px solid transparent;border-bottom:13px solid transparent;animation:fade .2s ease .85s forwards}
+#splash .pbar{position:absolute;left:0;bottom:0;height:4px;width:0;background:var(--yolk);animation:play .55s linear .3s forwards, fade .15s ease .9s forwards}
+#splash .rows{position:absolute;inset:16px 14px;display:flex;flex-direction:column;justify-content:center;gap:11px}
+#splash .rows i{display:flex;align-items:center;gap:6px;height:8px;transform:scaleX(0);transform-origin:left;animation:grow .25s ease forwards}
+#splash .rows i::before{content:"";width:34%;height:8px;border-radius:4px;background:#2B1E18}
+#splash .rows i::after{content:"";width:18%;height:8px;border-radius:4px;background:var(--pri);margin-left:auto}
+#splash .rows i span{flex:1;border-bottom:2px dotted #C9B8AC;transform:translateY(-1px)}
+#splash .rows i:nth-child(1){animation-delay:1.35s}#splash .rows i:nth-child(2){animation-delay:1.47s}#splash .rows i:nth-child(3){animation-delay:1.59s}
+#splash .rows i:nth-child(2)::before{width:26%}#splash .rows i:nth-child(3)::before{width:40%}#splash .rows i:nth-child(3)::after{width:13%}
+#splash .w{font-family:var(--disp);font-size:4.4rem;line-height:1;letter-spacing:-.03em;display:flex;margin-top:26px}
+#splash .ch{display:inline-block;opacity:0;transform:translateY(-24px);animation:drop .4s cubic-bezier(.3,1.5,.5,1) forwards}
+#splash .ch:nth-child(1){animation-delay:1.7s}#splash .ch:nth-child(2){animation-delay:1.82s}
+#splash .gauge{height:30px;gap:6px;margin-top:16px}
+#splash .gauge i{width:10px;border-radius:3px;background:rgba(255,255,255,.28);animation:on .18s ease forwards}
+#splash .gauge i:nth-child(1){--c:#FFE08A;animation-delay:2.0s}#splash .gauge i:nth-child(2){--c:var(--yolk);animation-delay:2.12s}#splash .gauge i:nth-child(3){--c:#fff;animation-delay:2.24s}
+#splash .tag{margin-top:14px;font-size:.92rem;opacity:0;animation:fade-in .3s ease 2.2s forwards}
+@keyframes pop{to{opacity:1;transform:none}}
+@keyframes play{to{width:100%}}
+@keyframes morph{to{width:200px;height:118px;border-radius:12px;background:#fff}}
+@keyframes grow{to{transform:none}}
+@keyframes fade{to{opacity:0}}
+@keyframes fade-in{to{opacity:.9}}
 @keyframes drop{to{opacity:1;transform:none}}
 @keyframes on{to{background:var(--c)}}
 @media (prefers-reduced-motion: reduce){#splash *{animation-duration:.01s!important;animation-delay:0s!important}}
+
+/* 약관 동의 화면 */
+#gate{position:fixed;inset:0;z-index:350;background:var(--bg);overflow:auto}
+#gate .in{max-width:560px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom))}
+#gate .lg{font-family:var(--disp);font-size:2rem;color:var(--pri);display:flex;align-items:center;gap:8px}
+#gate h2{margin-top:18px}
+.agree{border-top:1.5px solid var(--ink);margin-top:22px}
+.agree label{display:flex;gap:12px;align-items:flex-start;padding:15px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.agree input{width:22px;height:22px;accent-color:var(--pri);flex-shrink:0;margin-top:2px}
+.agree .tx{flex:1;font-size:.98rem}
+.agree .req{color:var(--pri);font-weight:700;font-size:.8rem;margin-right:4px}
+.agree .all{font-weight:700;font-size:1.05rem}
+.agree .view{font-size:.84rem;color:var(--sub);text-decoration:underline;text-underline-offset:3px;padding:2px 0 2px 8px;white-space:nowrap}
+.sumtbl{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:8px;color:var(--ink2)}
+.sumtbl th,.sumtbl td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+.sumtbl th{background:var(--line2);font-weight:700}
+.doc{font-size:.9rem;line-height:1.7}
+.doc h1{font-family:var(--disp);font-weight:400;font-size:1.5rem;margin:6px 0 2px}
+.doc h2{font-family:inherit;font-size:1rem;font-weight:700;margin:22px 0 6px}
+.doc ol,.doc ul{padding-left:1.3em}.doc li{margin:3px 0}
+.doc table{border-collapse:collapse;width:100%;font-size:.78rem;margin:8px 0;display:block;overflow-x:auto}
+.doc th,.doc td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top;min-width:70px}
+.doc th{background:var(--line2)}
+.doc .meta{color:var(--sub);font-size:.82rem}
+.ailabel{display:flex;gap:6px;align-items:flex-start;margin-top:10px;font-size:.8rem;color:var(--sub)}
+.ailabel b{color:var(--ink2);font-weight:700;white-space:nowrap}
+.legal{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:18px;font-size:.84rem}
+.legal button{color:var(--ink2);text-decoration:underline;text-underline-offset:3px;padding:2px 0}
+.legal button.danger{color:var(--hot)}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><div class="w"><span class="ch">릴</span><span class="ch">쿡</span></div><span class="gauge"><i></i><i></i><i></i></span></div>
+<div id="splash" aria-hidden="true"><div class="stage">
+  <div class="card"><b class="play"></b><b class="pbar"></b><div class="rows"><i><span></span></i><i><span></span></i><i><span></span></i></div></div>
+  <div class="w"><span class="ch">릴</span><span class="ch">쿡</span></div>
+  <span class="gauge"><i></i><i></i><i></i></span>
+  <p class="tag">릴스를 레시피로</p>
+</div></div>
+<div id="gate" class="hidden"></div>
 <header class="top"><div class="wrap">
   <div class="logo">릴쿡<span class="gauge g3" aria-hidden="true"><i></i><i></i><i></i></span></div>
   <div class="row" style="gap:8px"><button class="pill" id="who" style="display:none"></button><button class="pill" id="setBtn" aria-label="설정"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>
@@ -350,7 +427,7 @@ body.detail nav.tabs{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.1';
+const VERSION='v1.2';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -417,10 +494,10 @@ function openSaved(id){ const d=S.my.find(x=>x.id===id); if(!d) return; const re
 const tileHTML=(d,del=true)=>{ const r=d.recipe||{}; return `<div class="tile" data-open="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(r.title)}">${coverHTML(r)}
   <div class="t">${esc(r.title)}</div><div class="s"><span>${esc(r.total_min||'?')}분</span><span>${esc(r.servings)}인분</span></div>
   ${del?`<button class="del" data-del="${esc(d.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>`; };
-// 시작 애니메이션: 약 1.3초 뒤 사라짐 (공유로 열렸으면 짧게, 누르면 바로)
+// 시작 애니메이션: 릴스 → 레시피 카드 → 릴쿡, 약 2.7초 뒤 사라짐 (공유로 열렸으면 짧게, 누르면 바로)
 (function(){ const sp=document.getElementById('splash'); if(!sp) return;
   const quick=/[?&]share/.test(location.search); const end=()=>{ sp.classList.add('out'); setTimeout(()=>sp.remove(),400); };
-  sp.onclick=end; setTimeout(end, quick?700:1350); })();
+  sp.onclick=end; setTimeout(end, quick?650:2750); })();
 /* ================= 저장소 (계정 연동 전까지는 이 폰에만 저장) ================= */
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem(k); return v==null? d : JSON.parse(v); }catch(e){ return d; } },
@@ -436,6 +513,7 @@ const S = {
   pass: LS.get('rc_pass', ''),
   unit: LS.get('rc_unit', 'orig'),   // orig = 영상 단위(비율) / precise = g·ml
   fs: LS.get('rc_fs', 'm'),
+  theme: LS.get('rc_theme', 'base'),   // base | bright | dark | auto
   cooking:false
 };
 const $ = (s, el=document) => el.querySelector(s);
@@ -444,6 +522,12 @@ function toast(msg){ document.querySelectorAll('.toast').forEach(x=>x.remove());
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function applyFs(){ document.documentElement.classList.toggle('fs-l', S.fs==='l'); document.documentElement.classList.toggle('fs-xl', S.fs==='xl'); }
 applyFs();
+const THEME_BAR={base:'#D23B1F', bright:'#FFFFFF', dark:'#241B17'};
+const darkMQ=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){ const t=S.theme==='auto'?(darkMQ.matches?'dark':'base'):S.theme;
+  if (t==='base') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme=t;
+  const m=document.querySelector('meta[name=theme-color]'); if(m) m.content=THEME_BAR[t]||THEME_BAR.base; }
+applyTheme(); darkMQ.addEventListener && darkMQ.addEventListener('change', ()=>{ if(S.theme==='auto') applyTheme(); });
 
 /* ================= 화면 꺼짐 방지 ================= */
 let wakeLock=null, wakeWanted=false;
@@ -831,6 +915,7 @@ function viewRecipe(){
     ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button></div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
+    <div class="ailabel"><b>AI 정리</b><span>AI가 릴스를 보고 만든 레시피예요. 분량, 시간, 영양은 틀릴 수 있어요.</span></div>
     <div class="meta"><span>${IC.clock}${esc(r.total_min||'?')}분</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}${conf}${src.cached?'<span>저장된 분석</span>':''}</div>
     ${r.assumptions.length&&r.confidence!=='high'?`<div class="note" style="margin-top:14px">${r.assumptions.map(esc).join('<br>')}</div>`:''}
     ${src.caption||(src.comments&&src.comments.length)||src.link?`<details class="origin"><summary>원본 캡션과 댓글${IC.down}</summary><div class="body">
@@ -1112,7 +1197,7 @@ async function onSession(session){
   if (sessionUid===id) return; sessionUid=id; S.user=u;
   if (/[?&]code=/.test(location.search)) history.replaceState(null,'','/');
   renderWho();
-  if (u){ await loadProfile(); renderWho(); if (S.profile && !S.profile.setup_done) openProfile(true); await migrateLocal(); await loadMyRecipes(); S.feed=null; }
+  if (u){ await loadProfile(); renderWho(); syncConsent(); if (S.profile && !S.profile.setup_done) whenConsented(()=>openProfile(true)); await migrateLocal(); await loadMyRecipes(); S.feed=null; }
   else { S.my=LS.get('rc_recipes',[]); S.feed=null; S.profile=null; }
   if (!S.busy && !S.recipe && !S.cooking) render();
 }
@@ -1255,13 +1340,13 @@ function viewFeed(){
   return h+list.map(p=>{ const pr=p.profiles||{}, liked=S.liked.has(p.id), kind=p.kind||'cook', r=p.recipe;
     const top = kind==='cook'
       ? (p.photo_path?`<div class="phwrap"><img class="ph" src="${esc(photoUrl(p.photo_path))}" alt="" loading="lazy">${p.flagged?'<span class="flagged">부적절한 사진으로 판단되어 가렸어요</span>':''}</div>`:'')
-      : (r&&r.cover?`<div class="phwrap"><img class="ph" src="${esc(r.cover)}" alt="" loading="lazy" style="aspect-ratio:4/5"></div>`:'');
+      : '';
     return `<div class="post"><div class="au">${avatarHTML(pr.name, pr.avatar)}<b>${esc(pr.name||'요리하는 사람')}</b><span>${timeAgo(p.created_at)}</span><span class="kindtag kt-${kind}">${kind==='cook'?'요리 인증':'레시피'}</span></div>${top}
     <div class="bd">
       <div class="tt">${esc(p.title)}</div>
       ${kind==='cook'&&p.taste?`<div class="stars" aria-label="맛 ${p.taste}점">${'★'.repeat(p.taste)}<span style="color:var(--line)">${'★'.repeat(5-p.taste)}</span></div>`:''}
       ${p.body?`<div class="tx">${esc(p.body)}</div>`:''}
-      ${r?`<div class="rcard">${coverHTML(r)}<div style="flex:1;min-width:0"><b>${esc(r.title)}</b><div class="s"><span>${esc(r.total_min||'?')}분</span><span>재료 ${(r.ingredients||[]).length}개</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}</div></div></div>`:''}
+      ${r?`<div class="rcard">${coverHTML({title:r.title})}<div style="flex:1;min-width:0"><b>${esc(r.title)}</b><div class="s"><span>${esc(r.total_min||'?')}분</span><span>재료 ${(r.ingredients||[]).length}개</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}</div></div></div>`:''}
       <div class="acts"><button class="like ${liked?'on':''}" data-like="${esc(p.id)}" aria-label="하트">${liked?IC.heartOn:IC.heart}${p.likeCount}</button>
         ${r?`<button class="btn ghost sm" data-precipe="${esc(p.id)}">레시피 보기</button><button class="btn ghost sm" data-psave="${esc(p.id)}" aria-label="내 레시피에 저장">${IC.save}</button>`:''}
         ${p.user_id===S.user.id?`<button class="del" style="margin-left:auto;color:#B8A9A0;padding:8px" data-pdel="${esc(p.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>
@@ -1312,7 +1397,7 @@ function drawComposer(){
       ${comp.url?`<img src="${comp.url}" alt="" style="width:100%;border-radius:8px;max-height:340px;object-fit:cover"><button class="btn link" id="chgP" style="margin-top:8px">사진 바꾸기</button>`:`<label class="drop" for="pIn">${IC.camera}사진 찍기 또는 고르기</label>`}
       <input type="file" id="pIn" accept="image/*" class="hidden">`:''}
     <label class="fl">${cook?'만든 레시피 (선택)':'공유할 레시피'}</label>
-    <select id="rs" style="width:100%;min-height:50px;border:1.5px solid var(--line);border-radius:14px;padding:0 12px;background:#fff">
+    <select id="rs" style="width:100%;min-height:50px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;background:var(--paper)">
       ${comp.recipe?`<option value="__cur">${esc(comp.recipe.title)}</option>`:''}<option value="">${cook?'레시피 없이 올리기':'— 골라 주세요 —'}</option>${opts}</select>
     <label class="fl">제목</label><input type="text" id="pt" maxlength="60" value="${esc(comp.title)}" placeholder="${cook?'예: 처음 해본 대패숙주볶음':'예: 자취생 10분 레시피'}">
     ${cook?`<label class="fl">맛 셀프 평가</label><div class="starpick row" style="gap:0">${[1,2,3,4,5].map(n=>`<button data-st="${n}" class="${comp.taste>=n?'on':''}">★</button>`).join('')}</div>`:''}
@@ -1329,6 +1414,7 @@ function drawComposer(){
   $('#rs').onchange=()=>{ const v=$('#rs').value; if(!$('#pt').value.trim()){ const d=v==='__cur'?comp.recipe:(S.my.find(x=>x.id===v)||{}).recipe; if(d) $('#pt').value=d.title; } };
   $('#pg').onclick=submitPost;
 }
+function publicRecipe(rec){ const r=JSON.parse(JSON.stringify(rec)); delete r.cover; const l=r.source&&r.source.link; r.source=l?{link:l}:{}; return r; }
 async function submitPost(){
   const btn=$('#pg'), title=$('#pt').value.trim(), cook=comp.kind==='cook', err=m=>{ $('#perr').innerHTML=`<div class="err">${esc(m)}</div>`; };
   const sel=$('#rs').value; let recipe=null;
@@ -1338,7 +1424,7 @@ async function submitPost(){
   if (!title) return err('제목을 적어 주세요.');
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> 검토하고 올리는 중';
   try{
-    const body={kind:comp.kind, title, body:$('#px').value.trim(), taste:comp.taste||0, recipe: recipe?JSON.parse(JSON.stringify(recipe)):null};
+    const body={kind:comp.kind, title, body:$('#px').value.trim(), taste:comp.taste||0, recipe: recipe?publicRecipe(recipe):null};
     if (cook){ body.photo=await blobToB64(comp.blob); body.mosaic=await blobToB64(await mosaicOf(comp.blob)); }
     const {r,data}=await authApi('/api/post', body);
     if (!r.ok) throw new Error((MOD_ERR[data.error]||('올리지 못했어요 ('+(data.error||r.status)+')'))+(data.reason?` (${data.reason})`:'')+(data.detail?` — 원인: ${data.detail}`:''));
@@ -1353,13 +1439,18 @@ $('#setBtn').onclick=()=>{
   const pf=S.profile||{};
   const acct = !sb ? '' : S.user ? `<label class="fl">계정</label><div class="row">${avatarHTML(pf.name, pf.avatar)}<div style="flex:1;min-width:0"><b>${esc(pf.name||'')}</b><div class="muted" style="font-size:.8rem">${esc(S.user.email||'')}</div></div><button class="btn ghost sm" id="editPf">프로필 편집</button></div><button class="btn ghost sm" id="logout" style="margin-top:8px">로그아웃</button>` : `<label class="fl">계정</label>${gbtn()}`;
   $('#layer').innerHTML=`<div class="modal"><div class="sheet"><div class="row" style="justify-content:space-between"><h3>설정</h3><button class="x" id="pwx" aria-label="닫기">${IC.x}</button></div>${acct}
+    <label class="fl">화면</label>${opt('th',S.theme,[['base','기본'],['bright','밝게'],['dark','다크'],['auto','자동']])}
     <label class="fl">글자 크기</label>${opt('fs',S.fs,[['m','보통'],['l','크게'],['xl','아주 크게']])}
     <label class="fl">분량 표시</label>${opt('un',S.unit,[['orig','영상 속 단위'],['precise','그램·밀리리터']])}
     <label class="fl">앱 비밀번호</label>
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
-    <p class="muted" style="font-size:.8rem;margin-top:16px">릴쿡 ${VERSION}</p></div></div>`;
+    <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
+    <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ S.fs=b.dataset.fs; LS.set('rc_fs',S.fs); applyFs(); document.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
+  document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ S.theme=b.dataset.th; LS.set('rc_theme',S.theme); applyTheme(); document.querySelectorAll('[data-th]').forEach(x=>x.classList.toggle('on',x===b)); });
+  document.querySelectorAll('.legal [data-doc]').forEach(b=>b.onclick=()=>showDoc(b.dataset.doc));
+  $('#wd').onclick=withdraw;
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -1367,11 +1458,82 @@ $('#setBtn').onclick=()=>{
   $('#pws').onclick=()=>{ S.pass=$('#pw').value.trim(); LS.set('rc_pass',S.pass); $('#layer').innerHTML=''; render(); toast('저장했어요'); };
 };
 
+/* ================= 약관 동의 =================
+   ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
+const TERMS_VERSION='2026-11-11';
+const TERMS_CHANGES='';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+let legalDoc=null;
+async function loadLegal(){
+  if (legalDoc) return legalDoc;
+  const html=await (await fetch('/legal.html',{cache:'no-cache'})).text();
+  legalDoc=new DOMParser().parseFromString(html,'text/html'); return legalDoc;
+}
+async function showDoc(id){
+  const box=document.createElement('div'); box.className='modal'; box.style.zIndex=380;
+  box.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="row" style="justify-content:flex-end"><button class="x" aria-label="닫기">${IC.x}</button></div><div class="doc">불러오는 중…</div><button class="btn pri" style="margin-top:20px">확인</button></div>`;
+  document.body.appendChild(box);
+  const close=()=>box.remove(); box.querySelector('.x').onclick=close; box.querySelector('.btn').onclick=close;
+  try{ const d=await loadLegal(); const sec=d.getElementById(id); box.querySelector('.doc').innerHTML=sec?sec.innerHTML:'문서를 찾지 못했어요.'; }
+  catch(e){ box.querySelector('.doc').innerHTML='문서를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'; }
+}
+function consented(){ const c=LS.get('rc_consent',null); return !!(c && c.version===TERMS_VERSION); }
+let afterConsent=[];
+function whenConsented(fn){ if (consented()) fn(); else afterConsent.push(fn); }
+function showGate(){
+  const prev=LS.get('rc_consent',null), g=$('#gate'); g.classList.remove('hidden'); document.body.style.overflow='hidden';
+  const item=(k,label,view,extra='')=>`<label><input type="checkbox" data-agree="${k}"><span class="tx"><span class="req">필수</span>${label}${extra}</span>${view?`<button type="button" class="view" data-doc="${view}">보기</button>`:''}</label>`;
+  g.innerHTML=`<div class="in">
+    <div class="lg">릴쿡${gauge(3)}</div>
+    <h2>${prev?'약관이 바뀌었어요':'시작하기 전에<br>확인해 주세요'}</h2>
+    <p class="lead">${prev&&TERMS_CHANGES?esc(TERMS_CHANGES)+'<br>':''}릴쿡은 인스타그램 릴스를 AI(Google Gemini)로 분석해 레시피로 정리하는 무료 서비스예요. 아래 내용에 모두 동의해야 쓸 수 있어요.</p>
+    <div class="agree">
+      <label><input type="checkbox" id="agAll"><span class="tx all">모두 동의해요</span></label>
+      ${item('age','만 14세 이상이에요','')}
+      ${item('terms','이용약관','terms')}
+      ${item('privacy','개인정보 수집·이용','privacy',`<table class="sumtbl"><tr><th>항목</th><th>목적</th><th>보관</th></tr>
+        <tr><td>구글 계정 이메일·이름, 닉네임, 프로필 사진</td><td>로그인, 피드 작성자 표시</td><td>탈퇴할 때까지</td></tr>
+        <tr><td>게시물, 저장한 레시피</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
+        <tr><td>릴스 링크, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr></table>
+        <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">분석과 저장을 위해 Google(미국), Supabase, Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
+    </div>
+    <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
+    <button class="btn pri" id="agGo" disabled style="margin-top:18px;min-height:56px">동의하고 시작</button>
+  </div>`;
+  const boxes=[...g.querySelectorAll('[data-agree]')], all=$('#agAll'), go=$('#agGo');
+  const sync=()=>{ const ok=boxes.every(b=>b.checked); all.checked=ok; go.disabled=!ok; };
+  boxes.forEach(b=>b.onchange=sync); all.onchange=()=>{ boxes.forEach(b=>b.checked=all.checked); sync(); };
+  g.querySelectorAll('[data-doc]').forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); showDoc(b.dataset.doc); });
+  go.onclick=()=>{
+    LS.set('rc_consent',{version:TERMS_VERSION, at:new Date().toISOString(), items:['age','terms','privacy']});
+    g.classList.add('hidden'); g.innerHTML=''; document.body.style.overflow='';
+    syncConsent(); const q=afterConsent; afterConsent=[]; q.forEach(f=>{ try{ f(); }catch(e){} });
+  };
+}
+// 로그인한 회원은 서버에도 동의 기록을 남긴다 (증빙)
+async function syncConsent(){
+  if (!sb || !S.user) return; const c=LS.get('rc_consent',null); if (!c || c.version!==TERMS_VERSION) return;
+  const key='rc_consent_sync_'+S.user.id; if (LS.get(key,'')===c.version) return;
+  try{ const {r}=await authApi('/api/account',{action:'consent', version:c.version, at:c.at}); if (r.ok) LS.set(key,c.version); }catch(e){}
+}
+// 동의 철회: 회원이면 계정과 서버 데이터 삭제, 이 기기의 데이터도 모두 삭제
+function withdraw(){
+  const member=!!(sb&&S.user);
+  confirmBox(member?'탈퇴하고 모든 데이터를 삭제할까요? 계정, 프로필, 저장한 레시피, 올린 글과 사진이 지워지고 되돌릴 수 없어요.':'이 폰에 저장된 레시피와 설정을 모두 지우고 동의를 철회할까요? 되돌릴 수 없어요.', async()=>{
+    try{
+      if (member){ const {r,data}=await authApi('/api/account',{action:'delete', confirm:'탈퇴'}); if(!r.ok) throw new Error(data.detail||data.error||r.status); try{ await sb.auth.signOut(); }catch(e){} }
+      try{ localStorage.clear(); }catch(e){}
+      try{ indexedDB.deleteDatabase('reelcook'); }catch(e){}
+      location.replace('/');
+    }catch(e){ toast('삭제하지 못했어요: '+(e.message||e)); }
+  }, member?'탈퇴':'삭제');
+}
+
 /* ================= 시작 ================= */
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{ if(S.busy&&b.dataset.tab!=='import'){ toast('분석이 끝나면 이동할 수 있어요'); return; } stopAllTimers(); S.recipe=null; S.tab=b.dataset.tab; window.scrollTo(0,0); render(); });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 render();
-if (new URLSearchParams(location.search).has('share')) readShareInbox();
+if (!consented()) showGate();
+if (new URLSearchParams(location.search).has('share')) whenConsented(readShareInbox);
 initCloud();
 </script>
 </body>

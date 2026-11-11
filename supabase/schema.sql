@@ -117,3 +117,14 @@ alter table public.profiles add column if not exists avatar_flagged boolean not 
 drop policy if exists "내 글 쓰기" on public.posts;
 drop policy if exists "내 프로필 수정" on public.profiles;
 drop policy if exists "사진 올리기" on storage.objects;
+
+-- 릴쿡 v1.2: 약관 동의 기록 (한 번만 실행)
+-- 본인만 볼 수 있고, 쓰기는 서버(비밀 키)만 한다. 탈퇴하면 함께 지워진다.
+create table if not exists public.consents (
+  user_id uuid primary key references public.profiles on delete cascade,
+  terms_version text not null,
+  agreed_at timestamptz not null default now()
+);
+alter table public.consents enable row level security;
+drop policy if exists "내 동의 기록 보기" on public.consents;
+create policy "내 동의 기록 보기" on public.consents for select to authenticated using (user_id = auth.uid());

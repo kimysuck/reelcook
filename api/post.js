@@ -16,7 +16,9 @@ export default async function handler(req, res) {
   const title = String(b.title || '').trim();
   const text = String(b.body || '').trim();
   const taste = Math.max(0, Math.min(5, Math.round(Number(b.taste) || 0)));
-  const recipe = b.recipe && typeof b.recipe === 'object' ? b.recipe : null;
+  // 공개 게시물에는 원작자의 캡션·댓글·장면 사진을 싣지 않는다 (약관 제8조). 원본 링크만 남김
+  let recipe = b.recipe && typeof b.recipe === 'object' && !Array.isArray(b.recipe) ? { ...b.recipe } : null;
+  if (recipe) { delete recipe.cover; const l = recipe.source && typeof recipe.source.link === 'string' ? recipe.source.link.slice(0, 300) : null; recipe.source = l ? { link: l } : {}; }
   const photo = typeof b.photo === 'string' && b.photo.length < B64_MAX ? b.photo : null;
   const mosaic = typeof b.mosaic === 'string' && b.mosaic.length < B64_MAX ? b.mosaic : null;
 
