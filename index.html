@@ -177,6 +177,13 @@ details>summary::-webkit-details-marker{display:none}
 .cook .nav .btn{flex:1;min-height:64px;font-size:1.15rem}
 .bigtimer{margin-top:22px;font-size:3.2rem;font-weight:900;font-variant-numeric:tabular-nums}
 .awake{font-size:.8rem;color:#8F7F73;margin-top:22px}
+.scene{position:relative;margin-top:12px;border-radius:14px;overflow:hidden;background:#2A201A;aspect-ratio:4/3;max-width:420px;cursor:pointer}
+.scene img,.scene video{width:100%;height:100%;object-fit:cover;display:block}
+.scene .play{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.65);color:#fff;font-size:.82rem;font-weight:700;padding:6px 10px;border-radius:10px}
+.scene .snd{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.65);color:#fff;font-size:1rem;width:38px;height:38px;border-radius:50%}
+.scene.sk{display:flex;align-items:center;justify-content:center;color:#CDBFB5;font-size:.85rem;cursor:default;aspect-ratio:auto;height:90px}
+.cook .scene{max-width:none;aspect-ratio:auto;height:34vh;margin:0 0 18px;background:#000}
+.cook .scene video,.cook .scene img{object-fit:contain}
 </style>
 </head>
 <body>
@@ -196,7 +203,7 @@ details>summary::-webkit-details-marker{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION = 'v0.6';
+const VERSION = 'v0.7';
 /* ================= 저장소 (계정 연동 전까지는 이 폰에만 저장) ================= */
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem(k); return v==null? d : JSON.parse(v); }catch(e){ return d; } },
@@ -317,16 +324,17 @@ async function videoFrames(blob, n=8, max=768){
     const s=Math.min(1, max/Math.max(v.videoWidth||max, v.videoHeight||max));
     const c=document.createElement('canvas'); c.width=Math.round((v.videoWidth||max)*s); c.height=Math.round((v.videoHeight||max)*s);
     const ctx=c.getContext('2d'), out=[];
-    for (let i=0;i<n;i++){ v.currentTime=Math.min(d-0.1,(i+0.5)/n*d); await wait('seeked'); ctx.drawImage(v,0,0,c.width,c.height); out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.8))); }
-    return out;
+    const times=[];
+    for (let i=0;i<n;i++){ const t=Math.min(d-0.1,(i+0.5)/n*d); times.push(t); v.currentTime=t; await wait('seeked'); ctx.drawImage(v,0,0,c.width,c.height); out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.8))); }
+    return {frames:out, times};
   } finally { URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); }
 }
 function blobToB64(blob){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(blob); }); }
 async function addImages(blobs){ for (const b of blobs){ if (S.images.length>=8) break; try{ const s=await shrink(b); S.images.push({blob:s,url:URL.createObjectURL(s)}); }catch(e){} } }
 async function addVideo(blob, name){
   try{
-    const frames=await videoFrames(blob, 8);
-    S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[];
+    const {frames, times}=await videoFrames(blob, 8);
+    S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.videoBlob=blob; S.frameTimes=times;
     for (const f of frames) S.images.push({blob:f,url:URL.createObjectURL(f)});
     S.fromVideo=true; S.videoName=name||'공유받은 영상';
   }catch(e){ S.error='이 영상에서 장면을 뽑지 못했어요. 스크린샷으로 넣어 주세요.'; }
@@ -357,7 +365,7 @@ async function readShareInbox(){
   }catch(e){}
   if (!started){ history.replaceState(null,'','/'); render(); }
 }
-function resetInput(){ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.caption=''; S.link=''; S.fromVideo=false; S.fetched=null; S.error=''; S.shareNote=''; }
+function resetInput(){ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.videoBlob=null; S.frameTimes=null; S.caption=''; S.link=''; S.fromVideo=false; S.fetched=null; S.error=''; S.shareNote=''; }
 
 /* ================= 분석 ================= */
 const SAMPLE_CAPTION = `자취생 10분 컷 🔥 대패삼겹 숙주볶음
@@ -366,11 +374,14 @@ const SAMPLE_CAPTION = `자취생 10분 컷 🔥 대패삼겹 숙주볶음
 1. 팬에 대패 올려서 바싹 구워주세요
 2. 대파 마늘 넣고 향 내기
 3. 양념 붓고 숙주 넣어 센불에 30초만!`;
+function toSec(v){ if (v==null||v==='') return null; if (typeof v==='number') return isFinite(v)?v:null; const p=String(v).trim().split(':').map(Number); if (p.some(isNaN)) return null; return p.reduce((a,x)=>a*60+x,0); }
 function num(v){ if (v===null||v===undefined||v==='') return null; const n=Number(v); return isNaN(n)?null:n; }
 function parseJSON(txt){ const a=txt.indexOf('{'), b=txt.lastIndexOf('}'); if(a<0||b<0) throw new Error('JSON 없음'); return JSON.parse(txt.slice(a,b+1)); }
 function normalize(r){
   r.ingredients=(r.ingredients||[]).map(i=>({...i, grams:num(i.grams), ml:num(i.ml), count:num(i.count), orig_qty:num(i.orig_qty)}));
-  r.steps=(r.steps||[]).map(s=>({...s, seconds:num(s.seconds)||0})); r.tools=r.tools||[];
+  r.steps=(r.steps||[]).map(s=>{ const st={...s, seconds:num(s.seconds)||0, photo:toSec(s.photo), frame:num(s.frame)};
+    const a=toSec(s.clip&&s.clip.start), b=toSec(s.clip&&s.clip.end); st.clip = a!=null ? {start:a, end: b!=null&&b>a ? b : a+4} : null;
+    if (st.photo==null && st.clip) st.photo=(st.clip.start+st.clip.end)/2; return st; }); r.tools=r.tools||[];
   r.assumptions=(r.assumptions||[]).filter(Boolean); r.beginner_notes=(r.beginner_notes||[]).filter(Boolean).slice(0,3);
   r.servings=Math.max(1, Math.round(num(r.servings)||2)); r.nutrition_per_serving=r.nutrition_per_serving||{};
   return r;
@@ -431,9 +442,15 @@ async function analyze(){
     const rec=normalize(parseJSON(data.text));
     if (!rec.ingredients.length) throw new Error('이 영상에서 레시피를 찾지 못했어요. 요리 과정이 나오는 릴스인지 확인해 주세요.');
     const src=data.source||{};
-    rec.source={link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000)};
+    rec.source={link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null};
+    // 갤러리 영상/스크린샷으로 분석한 경우: 이미지 번호 → 장면
+    let localVideo=null, shots=null;
+    if (S.fromVideo && S.videoBlob && S.frameTimes){ localVideo=S.videoBlob;
+      rec.steps.forEach(st=>{ if (st.frame!=null && S.frameTimes[st.frame]!=null && st.photo==null){ st.photo=S.frameTimes[st.frame]; st.clip={start:Math.max(0,st.photo-2), end:st.photo+2}; } }); }
+    else if (S.images.length){ shots=rec.steps.map(st=> st.frame!=null && S.images[st.frame] ? S.images[st.frame].blob : null); }
     S.busy=false; clearInterval(tick); S.t0=0;
     openRecipe(rec, null);
+    prepareMedia(rec, {videoBlob:localVideo, shotBlobs:shots});
   }catch(e){
     const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
     if (net){ S.canRetry=true; S.error='인터넷 연결이 중간에 끊겼어요. 와이파이·데이터 상태를 확인하고 다시 시도해 주세요.'; }
@@ -444,6 +461,7 @@ async function analyze(){
 
 /* ================= 렌더링 ================= */
 function render(){
+  playing=null;
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab && !S.recipe));
   setAwake(S.busy || !!S.recipe || S.cooking);
   const app=$('#app');
@@ -518,10 +536,10 @@ function bindImport(){
   const inst=$('#inst'); if(inst) inst.onclick=async()=>{ try{ await installEvt.prompt(); }catch(e){} installEvt=null; render(); };
   $('#mIn').onchange=async e=>{
     const files=[...e.target.files], v=files.find(f=>f.type.startsWith('video/')); S.error='';
-    if (v) await addVideo(v, v.name); else { S.fromVideo=false; await addImages(files.filter(f=>f.type.startsWith('image/'))); }
+    if (v) await addVideo(v, v.name); else { S.fromVideo=false; S.videoBlob=null; S.frameTimes=null; await addImages(files.filter(f=>f.type.startsWith('image/'))); }
     render();
   };
-  const cv=$('#clrV'); if(cv) cv.onclick=()=>{ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.fromVideo=false; render(); };
+  const cv=$('#clrV'); if(cv) cv.onclick=()=>{ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.fromVideo=false; S.videoBlob=null; S.frameTimes=null; render(); };
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.rm; URL.revokeObjectURL(S.images[i].url); S.images.splice(i,1); if(!S.images.length) S.fromVideo=false; render(); });
   $('#go').onclick=analyze;
   const rt=$('#retry'); if(rt) rt.onclick=analyze;
@@ -534,7 +552,7 @@ function bindImport(){
 }
 
 /* ---------- 레시피 상세 ---------- */
-function openRecipe(r, savedId){ S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
+function openRecipe(r, savedId){ clearMedia(); S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
 function k(){ return S.servings / S.recipe.servings; }
 function stepHTML(text){ const r=S.recipe; return esc(text).replace(/\[\[(\d+)\]\]/g,(m,i)=>{ const ing=r.ingredients[+i]; if(!ing) return ''; const a=amountOf(ing,k()); return `<b>${esc(ing.name)} ${esc(a.big==='적당량'||a.big==='약간'?'약간':a.big)}</b>`; }); }
 function heatCls(h){ return h==='약불'?'h1':h==='중불'?'h2':h==='강불'?'h3':'h0'; }
@@ -563,6 +581,7 @@ function viewRecipe(){
       ${s.cue?`<div class="cue">✅ ${esc(s.cue)}</div>`:''}
       ${s.tip?`<div class="tip">💡 ${esc(s.tip)}</div>`:''}
       ${s.mistake?`<div class="mis">⚠️ ${esc(s.mistake)}</div>`:''}
+      ${sceneHTML(i,false)}
       ${s.seconds>0?`<div class="timer" data-timer="${i}"><span class="tm">⏱ ${mmss(s.seconds)}</span><button data-tstart="${i}">시작</button></div>`:''}
     </div></div>`).join('')}</div>`;
   }
@@ -610,7 +629,8 @@ function viewRecipe(){
   </div></div>`;
 }
 function bindRecipe(){
-  $('#back').onclick=()=>{ stopAllTimers(); S.recipe=null; render(); };
+  $('#back').onclick=()=>{ stopAllTimers(); clearMedia(); S.recipe=null; render(); };
+  bindScenes($('#app'));
   $('#sm').onclick=()=>{ if(S.servings>1){S.servings--; render();} };
   $('#sp').onclick=()=>{ if(S.servings<12){S.servings++; render();} };
   document.querySelectorAll('[data-rt]').forEach(b=>b.onclick=()=>{ S.rtab=b.dataset.rt; render(); });
@@ -624,6 +644,108 @@ function bindRecipe(){
   };
   $('#save').onclick=saveRecipe;
   $('#cookBtn').onclick=()=>openCook(0);
+}
+
+/* ---------- 단계별 장면 (영상 · 사진) ---------- */
+const IDB = {
+  db:null,
+  open(){ if (this.db) return Promise.resolve(this.db); return new Promise((res,rej)=>{ const r=indexedDB.open('reelcook',1); r.onupgradeneeded=()=>r.result.createObjectStore('media'); r.onsuccess=()=>{ this.db=r.result; res(r.result); }; r.onerror=()=>rej(r.error); }); },
+  async tx(mode, fn){ const db=await this.open(); return new Promise((res,rej)=>{ const t=db.transaction('media',mode); const out=fn(t.objectStore('media')); t.oncomplete=()=>res(out&&out.result); t.onerror=()=>rej(t.error); }); },
+  put(k,v){ return this.tx('readwrite', st=>st.put(v,k)); },
+  get(k){ return this.tx('readonly', st=>st.get(k)); },
+  del(k){ return this.tx('readwrite', st=>st.delete(k)); },
+};
+S.media=null; // {status, pct, blob, url, thumbBlobs[], thumbs[]}
+function clearMedia(){ const m=S.media; if(m){ m.dead=true; if(m.url) URL.revokeObjectURL(m.url); (m.thumbs||[]).forEach(u=>u&&URL.revokeObjectURL(u)); } S.media=null; }
+function hasScene(st){ return st && (st.photo!=null || st.clip || st.frame!=null); }
+function sceneHTML(i, cook){
+  const st=S.recipe.steps[i], m=S.media;
+  if (!m || !hasScene(st) || m.status==='none') return '';
+  if (m.status==='loading') return `<div class="scene sk" data-sk>🎬 장면 불러오는 중 <span class="pct" style="margin-left:4px">${Math.round((m.pct||0)*100)}%</span></div>`;
+  if (m.status!=='ready') return '';
+  const thumb=m.thumbs[i], clip=m.url && st.clip;
+  if (!thumb && !clip) return '';
+  const label = clip ? `▶ 장면 보기 ${mmss(st.clip.start)}~${mmss(st.clip.end)}` : '📷 이 단계 장면';
+  return `<div class="scene" data-scene="${i}" ${cook&&clip?'data-auto':''}>${thumb?`<img src="${thumb}" alt="${i+1}단계 장면">`:'<div style="height:100%"></div>'}${clip?`<span class="play">${label}</span>`:''}</div>`;
+}
+function bindScenes(root){ root.querySelectorAll('[data-scene]').forEach(el=>el.onclick=e=>{ if(e.target.closest('.snd')) return; playScene(el); }); }
+let playing=null;
+function playScene(el){
+  const i=+el.dataset.scene, st=S.recipe.steps[i], m=S.media;
+  if (!m || !m.url || !st.clip) return;
+  if (playing && playing!==el) stopScene(playing);
+  if (el.querySelector('video')) return;
+  const s0=Math.max(0, st.clip.start-0.5), e0=Math.max(st.clip.end+0.5, s0+2);
+  const v=document.createElement('video'); v.src=m.url; v.muted=true; v.playsInline=true; v.setAttribute('playsinline',''); v.preload='auto';
+  v.addEventListener('loadedmetadata',()=>{ v.currentTime=s0; v.play().catch(()=>{}); },{once:true});
+  v.addEventListener('timeupdate',()=>{ if (v.currentTime>=e0 || v.currentTime<s0-1) v.currentTime=s0; });
+  const snd=document.createElement('button'); snd.className='snd'; snd.textContent='🔇';
+  snd.onclick=()=>{ v.muted=!v.muted; snd.textContent=v.muted?'🔇':'🔊'; if(!v.muted) v.play().catch(()=>{}); };
+  el.innerHTML=''; el.appendChild(v); el.appendChild(snd); playing=el;
+}
+function stopScene(el){ const v=el.querySelector('video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); } const i=+el.dataset.scene; el.outerHTML=sceneHTML(i, !!el.closest('.cook')); playing=null; bindScenes(document); }
+function mediaProgress(){ document.querySelectorAll('[data-sk] .pct').forEach(x=>x.textContent=Math.round((S.media.pct||0)*100)+'%'); }
+
+async function downloadReel(u, onPct){
+  const parts=[]; let pos=0, total=null; const CH=3*1024*1024;
+  for (let guard=0; guard<40; guard++){
+    const r=await fetch(`/api/video?u=${encodeURIComponent(u)}&k=${encodeURIComponent(S.pass||'')}`,{headers:{Range:`bytes=${pos}-${pos+CH-1}`}});
+    if (r.status===410) throw new Error('expired');
+    if (!r.ok) throw new Error('http '+r.status);
+    const b=await r.blob(); parts.push(b); pos+=b.size;
+    const cr=r.headers.get('content-range'); total = cr && /\/(\d+)/.test(cr) ? +cr.match(/\/(\d+)/)[1] : (r.status===200 ? pos : total);
+    onPct(total ? pos/total : 0);
+    if (r.status===200 || !b.size || (total && pos>=total)) break;
+  }
+  return new Blob(parts,{type:'video/mp4'});
+}
+async function makeThumbs(url, steps){
+  const v=document.createElement('video'); v.muted=true; v.playsInline=true; v.preload='auto'; v.src=url;
+  const wait=(ev,ms=8000)=>new Promise((res,rej)=>{ const t=setTimeout(()=>rej(new Error('t')),ms); v.addEventListener(ev,()=>{clearTimeout(t);res();},{once:true}); });
+  await wait('loadeddata',20000);
+  const d=v.duration||0, W=480, sc=Math.min(1, W/(v.videoWidth||W));
+  const c=document.createElement('canvas'); c.width=Math.round((v.videoWidth||W)*sc); c.height=Math.round((v.videoHeight||W)*sc); const ctx=c.getContext('2d');
+  const out=[];
+  for (const st of steps){
+    if (st.photo==null){ out.push(null); continue; }
+    try{ v.currentTime=Math.min(Math.max(0,st.photo), Math.max(0,d-0.1)); await wait('seeked'); ctx.drawImage(v,0,0,c.width,c.height); out.push(await new Promise(r=>c.toBlob(r,'image/jpeg',0.8))); }
+    catch(e){ out.push(null); }
+  }
+  v.removeAttribute('src'); v.load();
+  return out;
+}
+function mediaReady(m){ if (m.dead) return; m.status='ready'; m.thumbs=(m.thumbBlobs||[]).map(b=>b?URL.createObjectURL(b):null); if (S.recipe && S.media===m && !playing){ if (S.cooking) drawCook(); else render(); } }
+async function prepareMedia(rec, {videoBlob=null, shotBlobs=null}={}){
+  if (!rec.steps.some(hasScene)) return;
+  const m={status:'loading', pct:0}; S.media=m;
+  if (S.recipe===rec) render();
+  try{
+    if (shotBlobs && !videoBlob){ m.thumbBlobs=shotBlobs; m.blob=null; return mediaReady(m); }
+    let blob=videoBlob;
+    if (!blob && rec.source && rec.source.videoUrl) blob=await downloadReel(rec.source.videoUrl, p=>{ m.pct=p; mediaProgress(); });
+    if (!blob || m.dead){ m.status='none'; return; }
+    m.blob=blob; m.url=URL.createObjectURL(blob);
+    m.thumbBlobs=await makeThumbs(m.url, rec.steps);
+    mediaReady(m);
+  }catch(e){ m.status='none'; if (S.recipe===rec && S.media===m) render(); }
+}
+async function persistMedia(id){
+  const m=S.media; if (!m) return;
+  const wait=async()=>{ for(let i=0;i<120 && m.status==='loading';i++) await new Promise(r=>setTimeout(r,1000)); };
+  await wait(); if (m.status!=='ready') return;
+  try{ await IDB.put(id, {video:m.blob||null, thumbs:m.thumbBlobs||[]}); }
+  catch(e){ try{ await IDB.put(id, {video:null, thumbs:m.thumbBlobs||[]}); toast('저장 공간이 부족해 장면 사진만 저장했어요'); }catch(_){} }
+}
+async function restoreMedia(rec, id){
+  if (!rec.steps.some(hasScene)) return;
+  let saved=null; try{ saved=await IDB.get(id); }catch(e){}
+  if (S.recipe!==rec) return;
+  if (saved && (saved.video || (saved.thumbs||[]).some(Boolean))){
+    const m={status:'loading', pct:1, blob:saved.video||null, thumbBlobs:saved.thumbs||[]}; S.media=m;
+    if (m.blob) m.url=URL.createObjectURL(m.blob);
+    return mediaReady(m);
+  }
+  if (rec.source && rec.source.videoUrl){ await prepareMedia(rec); if (S.media && S.media.status==='ready') persistMedia(id); }
 }
 
 /* ---------- 타이머 ---------- */
@@ -659,7 +781,7 @@ function drawCook(){
   $('#layer').innerHTML=`<div class="cook">
     <div class="top"><b>${esc(r.title)} · ${S.servings}인분</b><button class="btn sm" style="background:#3A2E27;color:#fff" id="cx">닫기 ✕</button></div>
     <div class="prog"><i style="width:${(cookIdx+1)/n*100}%"></i></div>
-    <div class="body"><div class="sn">STEP ${cookIdx+1} / ${n} ${s.heat&&s.heat!=='없음'?` · 🔥 ${esc(s.heat)}`:''}</div>
+    <div class="body">${sceneHTML(cookIdx,true)}<div class="sn">STEP ${cookIdx+1} / ${n} ${s.heat&&s.heat!=='없음'?` · 🔥 ${esc(s.heat)}`:''}</div>
       <div class="st">${stepHTML(s.text)}</div>
       ${s.cue?`<div class="cue" style="margin-top:18px">✅ ${esc(s.cue)}</div>`:''}${s.tip?`<div class="tip">💡 ${esc(s.tip)}</div>`:''}${s.mistake?`<div class="mis">⚠️ ${esc(s.mistake)}</div>`:''}
       ${s.seconds>0?`<div class="bigtimer" id="bigTimer" data-i="${cookIdx}">${mmss(s.seconds)}</div><button class="btn sec" id="ct" style="margin-top:8px">⏱ 타이머 시작 / 정지</button>`:''}
@@ -668,12 +790,14 @@ function drawCook(){
     <div class="nav"><button class="btn" style="background:#3A2E27;color:#fff" id="cp" ${cookIdx===0?'disabled':''}>← 이전</button>
       <button class="btn pri" id="cn">${cookIdx===n-1?'완성! 🎉':'다음 →'}</button></div></div>`;
   $('#cx').onclick=closeCook;
-  $('#cp').onclick=()=>{ if(cookIdx>0){cookIdx--; drawCook();} };
-  $('#cn').onclick=()=>{ if(cookIdx<n-1){cookIdx++; drawCook();} else { closeCook(); toast('🎉 완성! 자랑 피드는 다음 업데이트에서 열려요'); } };
+  $('#cp').onclick=()=>{ if(cookIdx>0){cookIdx--; playing=null; drawCook();} };
+  $('#cn').onclick=()=>{ if(cookIdx<n-1){cookIdx++; playing=null; drawCook();} else { closeCook(); toast('🎉 완성! 자랑 피드는 다음 업데이트에서 열려요'); } };
   const ct=$('#ct'); if(ct) ct.onclick=()=>toggleTimer(cookIdx);
+  bindScenes($('#layer'));
+  const auto=$('#layer .scene[data-auto]'); if(auto) playScene(auto);
   refreshTimerUI();
 }
-function closeCook(){ $('#layer').innerHTML=''; S.cooking=false; render(); }
+function closeCook(){ if(playing){ const v=playing.querySelector('video'); if(v) v.pause(); playing=null; } $('#layer').innerHTML=''; S.cooking=false; render(); }
 
 /* ---------- 내 레시피 ---------- */
 function saveRecipe(){
@@ -681,6 +805,7 @@ function saveRecipe(){
   const id=uid(); S.my.unshift({id, recipe:S.recipe, savedAt:Date.now()});
   if (!LS.set('rc_recipes', S.my)){ S.my.shift(); toast('저장 공간이 부족해요'); return; }
   S.recipeSavedId=id; toast('📒 내 레시피에 저장했어요'); render();
+  persistMedia(id);
 }
 function viewBox(){
   if (!S.my.length) return `<h2>내 레시피 📒</h2><div class="empty"><div class="big">🥄</div>아직 저장한 레시피가 없어요.<br>릴스를 공유해서 첫 레시피를 만들어 보세요!</div>`;
@@ -691,8 +816,8 @@ function viewBox(){
 }
 function bindBox(){
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=e=>{ if(e.target.closest('[data-del]')) return;
-    const d=S.my.find(x=>x.id===b.dataset.open); if(d) openRecipe(normalize(JSON.parse(JSON.stringify(d.recipe))), d.id); });
-  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); confirmBox('이 레시피를 삭제할까요?', ()=>{ S.my=S.my.filter(x=>x.id!==b.dataset.del); LS.set('rc_recipes',S.my); render(); toast('삭제했어요'); }); });
+    const d=S.my.find(x=>x.id===b.dataset.open); if(d){ const rec=normalize(JSON.parse(JSON.stringify(d.recipe))); openRecipe(rec, d.id); restoreMedia(rec, d.id); } });
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); confirmBox('이 레시피를 삭제할까요?', ()=>{ S.my=S.my.filter(x=>x.id!==b.dataset.del); LS.set('rc_recipes',S.my); IDB.del(b.dataset.del).catch(()=>{}); render(); toast('삭제했어요'); }); });
 }
 function confirmBox(msg, ok){
   $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>${esc(msg)}</h3><div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="no">취소</button><button class="btn pri" style="flex:1" id="yes">확인</button></div></div></div>`;

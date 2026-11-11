@@ -1,7 +1,7 @@
 // 2단계: 캡션 · 작성자 댓글 · 영상 → Gemini → 레시피 JSON
 // Gemini API 키는 Vercel 환경변수 GEMINI_API_KEY에만 있고, 폰(브라우저)에는 절대 전달되지 않습니다.
 
-import { getReelMeta, downloadVideo, shortcodeOf } from '../lib/instagram.js';
+import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK } from '../lib/instagram.js';
 
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
@@ -43,6 +43,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
 - heat: "약불","중불","강불","불 끔","없음" 중 하나. seconds: 그 단계 소요 시간(초).
 - cue: 다음 단계로 넘어가도 되는 상태를 눈으로 확인할 수 있게 짧고 구체적으로. tip: 초보 팁 한 문장. mistake: 흔한 실수 한 문장(없으면 "").
 - 문장은 짧게, 한 단계에 한 동작 위주로.
+${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나오는 구간을 clip {"start":"MM:SS","end":"MM:SS"}로, 그 단계의 결과·상태가 가장 잘 보이는 순간을 photo "MM:SS"로 적는다. 실제 화면 프레임 기준으로만 적고, 영상에 안 나온 단계는 clip과 photo를 null로 한다.` : ''}${nImg ? `- 장면 번호: 각 단계에 가장 잘 맞는 이미지 번호를 frame(0부터, 이미지 순서)으로 적는다. 맞는 이미지가 없으면 null.` : ''}
 
 [장보기 — 간단하게]
 - buy: 장을 봐야 하는 재료만 true. 물, 소금, 후추, 설탕, 식용유, 간장, 참기름, 다진마늘처럼 대부분 집에 있는 기본 양념은 false.
@@ -53,7 +54,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
 출력 JSON 형식(이 키만 사용):
 {"title":"","emoji":"🍳","summary":"한 줄","servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","assumptions":[""],
 "ingredients":[{"name":"","group":"주재료|양념|기타","original":"영상·캡션 원문 표현","orig_qty":2,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
-"steps":[{"text":"","heat":"중불","seconds":60,"cue":"","tip":"","mistake":""}],
+"steps":[{"text":"","heat":"중불","seconds":60,"cue":"","tip":"","mistake":""${hasVideo ? ',"clip":{"start":"00:05","end":"00:09"},"photo":"00:08"' : ''}${nImg ? ',"frame":0' : ''}}],
 "tools":[{"name":"","buy_keyword":""}],
 "nutrition_per_serving":{"kcal":0,"carb_g":0,"protein_g":0,"fat_g":0,"sugar_g":0,"sodium_mg":0},
 "beginner_notes":["시작 전에 알아두면 좋은 점, 최대 3개"]}
@@ -132,7 +133,7 @@ async function run(body, emit, t0) {
     return parts;
   };
   let parts = buildParts(true);
-  const source = { gotCaption: !!caption, gotComments: comments.length, gotVideo: !!video, visualOnly, longVideo, fps, caption: caption.slice(0, 3000), comments, notes };
+  const source = { videoUrl: video && CDN_OK.test(videoUrl || '') ? videoUrl : null, duration, gotCaption: !!caption, gotComments: comments.length, gotVideo: !!video, visualOnly, longVideo, fps, caption: caption.slice(0, 3000), comments, notes };
   emit({ stage: 'analyze', visualOnly, longVideo, gotVideo: !!video, videoMB: video ? +(video.bytes / 1048576).toFixed(1) : 0 });
 
   const left = () => DEADLINE_MS - (Date.now() - t0);
