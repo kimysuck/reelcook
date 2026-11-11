@@ -16,6 +16,9 @@
 | `GEMINI_API_KEY` | ✅ | Google AI Studio에서 발급한 키 (`AIza…`) |
 | `APP_PASSCODE` | 권장 | 아무 비밀번호. 앱 ⚙️ 설정에 같은 값 입력 |
 | `GEMINI_MODEL` | 선택 | 기본 `gemini-3.8-flash` (실패 시 3.5-flash로 자동 전환) |
+| `SUPABASE_URL` | 로그인·피드 | Supabase 프로젝트 주소 |
+| `SUPABASE_PUBLISHABLE_KEY` | 로그인·피드 | `sb_publishable_…` (앱에 공개되는 키) |
+| `SUPABASE_SECRET_KEY` | 분석 캐시 | `sb_secret_…` (서버 전용, 절대 공개 금지) |
 | `APIFY_TOKEN` | 자동 분석에 필요 | Apify API 토큰. 인스타가 Vercel 서버 IP를 막기 때문에 대행 서비스로 릴스 캡션·영상을 가져옴 |
 
 환경변수를 바꾼 뒤에는 **Redeploy** 해야 반영됩니다.
@@ -26,5 +29,5 @@
 ## 단계
 - [x] 1단계: PWA + 공유받기 + Gemini 분석 (영상은 장면 6장 추출)
 - [x] 2단계: 영상 전체(소리 포함) 분석 · 단계별 장면 보기
-- [ ] 3단계: 구글 로그인 · 계정 저장 · 자랑 피드 (Supabase)
+- [x] 3단계: 구글 로그인 · 계정 저장 · 자랑 피드 · 분석 캐시 (Supabase, `supabase/schema.sql`)
 - [ ] 4단계: 다듬기 · 베타 배포

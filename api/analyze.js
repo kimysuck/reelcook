@@ -2,6 +2,7 @@
 // Gemini API 키는 Vercel 환경변수 GEMINI_API_KEY에만 있고, 폰(브라우저)에는 절대 전달되지 않습니다.
 
 import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK } from '../lib/instagram.js';
+import { cacheGet, cachePut, cachePatch } from '../lib/db.js';
 
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
@@ -100,6 +101,17 @@ async function run(body, emit, t0) {
     }
   }
   const notes = [];
+  const code = shortcodeOf(link);
+
+  // ⚡ 캐시: 누군가 이미 분석한 릴스면 바로 돌려준다 (Apify·Gemini 비용 0, 1초 이내)
+  if (code && !images.length && !body.noCache) {
+    const hit = await cacheGet(code);
+    if (hit && hit.recipe) {
+      emit({ stage: 'cached' });
+      cachePatch(code, { hits: (hit.hits || 0) + 1 });
+      return { status: 200, json: { text: JSON.stringify(hit.recipe), model: hit.model || 'cache', source: { ...(hit.source || {}), videoUrl: hit.video_url || null, cached: true } } };
+    }
+  }
 
   // 링크만 왔으면 서버가 릴스 정보를 직접 가져온다
   if (shortcodeOf(link) && !body.fetched && !images.length) {
@@ -171,6 +183,14 @@ async function run(body, emit, t0) {
       break;
     }
     if (!r.text) return { status: 502, json: { error: 'empty_answer', finish: r.finish, notes } };
+    // 결과 저장 (링크로 분석한 경우만, 레시피가 있을 때만)
+    if (code && !images.length) {
+      const rec = parseRecipe(r.text);
+      if (rec && Array.isArray(rec.ingredients) && rec.ingredients.length) {
+        const { notes: _n, ...src } = source;
+        await cachePut(code, { recipe: rec, source: src, video_url: source.videoUrl, model });
+      }
+    }
     return { status: 200, json: { text: r.text, model, source } };
   }
   if (lastErr?.busy) return { status: 503, json: { error: 'busy' } };
