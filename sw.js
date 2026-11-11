@@ -1,5 +1,5 @@
 // 릴쿡 서비스 워커: 오프라인 캐시 + 인스타 "공유" 받기
-const VERSION = 'reelcook-v2';
+const VERSION = 'reelcook-v3';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 const INBOX = 'share-inbox';
 

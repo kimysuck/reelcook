@@ -345,7 +345,7 @@ async function analyze(){
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
   const auto = igLink && !S.images.length;
   S.busy=true; S.error=''; S.shareNote='';
-  const steps = auto ? [[0,'📥 릴스 가져오는 중…'],[4000,'🎬 영상 보는 중… (화면 + 음성 분석)'],[16000,'🧮 g·ml로 계량 환산 중…'],[30000,'거의 다 됐어요… 영상이 길면 조금 더 걸려요']]
+  const steps = auto ? [[0,'📥 릴스 가져오는 중…'],[4000,'🎬 영상 보는 중… (화면 + 음성 분석)'],[16000,'🧮 g·ml로 계량 환산 중…'],[30000,'거의 다 됐어요… 영상이 길면 1분 정도 걸려요'],[75000,'조금만 더요! 긴 영상을 꼼꼼히 보는 중이에요 🙏']]
                      : [[0,'AI가 레시피를 읽는 중…'],[12000,'🧮 g·ml로 계량 환산 중…']];
   const timers = steps.map(([t,msg])=>setTimeout(()=>{ S.status=msg; const el=document.querySelector('.status'); if(el) el.textContent=msg; else if(t===0) render(); },t));
   S.status=steps[0][1]; render();
@@ -599,7 +599,7 @@ $('#setBtn').onclick=()=>{
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel에 APP_PASSCODE를 정했다면 입력">
     <p class="muted" style="font-size:12px;margin-top:6px">내 Gemini 사용량을 다른 사람이 쓰지 못하게 막는 비밀번호예요.</p>
     <div class="row" style="margin-top:16px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
-    <p class="muted" style="font-size:12px;margin-top:16px">릴쿡 v0.2 · 자동 분석</p></div></div>`;
+    <p class="muted" style="font-size:12px;margin-top:16px">릴쿡 v0.3 · 자동 분석</p></div></div>`;
   $('#pwc').onclick=()=>$('#layer').innerHTML='';
   $('#pws').onclick=()=>{ S.pass=$('#pw').value.trim(); LS.set('rc_pass',S.pass); $('#layer').innerHTML=''; toast('저장했어요'); };
 };

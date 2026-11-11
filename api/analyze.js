@@ -3,7 +3,8 @@
 
 import { fetchInstagram, shortcodeOf } from '../lib/instagram.js';
 
-export const config = { maxDuration: 60 };
+// Vercel 무료(Hobby) 플랜 최대 300초. Apify(10~40초) + 영상 다운로드 + Gemini 영상 분석을 넉넉히 수용
+export const config = { maxDuration: 300 };
 
 // 모델은 자주 바뀌므로: 환경변수 GEMINI_MODEL이 있으면 그것을 먼저, 실패하면 다음 후보로 자동 전환
 const MODELS = [...new Set([process.env.GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash'].filter(Boolean))];
@@ -81,15 +82,20 @@ export default async function handler(req, res) {
   try {
     let lastErr = null;
     for (const model of MODELS) {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      // 속도 최적화: 생각 수준 low + 영상 해상도 low (레시피 추출엔 충분). 지원 안 하는 모델이면 옵션 빼고 재시도
+      const fast = { responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' };
+      const call = (generationConfig) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
-        }),
+        body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig }),
       });
-      const data = await r.json().catch(() => ({}));
+      let r = await call(fast);
+      let data = await r.json().catch(() => ({}));
+      if (r.status === 400 && /thinking|media_?resolution|Unknown name|Invalid value/i.test(data?.error?.message || '')) {
+        console.warn('fast options rejected, retrying plain:', data?.error?.message);
+        r = await call({ responseMimeType: 'application/json' });
+        data = await r.json().catch(() => ({}));
+      }
       if (r.status === 429) return res.status(429).json({ error: 'rate_limited' });
       if (!r.ok) {
         const msg = data?.error?.message || '';
