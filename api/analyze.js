@@ -18,11 +18,10 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
   const fmt = list => list.map((c, i) => `(${i + 1})${c.likes ? ` [좋아요 ${c.likes}]` : ''} ${c.text}`).join('\n');
   return `너는 요리 초보를 위한 레시피 정리 전문가다. 인스타그램 릴스 자료를 보고, 그 안에 있는 레시피를 빠짐없이 찾아 그대로 따라 할 수 있게 JSON으로만 출력하라.
 
-자료: ${[caption ? '작성자 캡션' : null, owner.length ? `작성자 댓글 ${owner.length}개` : null, viewer.length ? `시청자 댓글 ${viewer.length}개` : null, hasVideo ? '릴스 영상(화면 + 음성)' : null, nImg ? `${fromVideo ? '영상에서 뽑은 장면' : '장면 스크린샷'} ${nImg}장` : null].filter(Boolean).join(', ')}
 
 [1단계 — 근거 모으기: evidence를 먼저 채운다]
-- speech: 영상 음성(내레이션·대사)에서 들은 재료, 분량, 순서를 그대로 요약한다. 음성이 없거나 음악뿐이면 "".
-- onscreen_text: 화면에 나온 자막·글자(재료 이름, 분량, 단계 번호, 포장지 글씨)를 읽어 요약한다. 없으면 "".
+- speech: 영상 음성(내레이션·대사)에서 들은 재료와 분량만 150자 이내로 요약한다. 음성이 없거나 음악뿐이면 "".
+- onscreen_text: 화면 자막·글자(재료 이름, 분량, 포장지 글씨)에서 읽은 재료와 분량만 150자 이내로 요약한다. 없으면 "".
 - caption: 캡션에 레시피가 직접 적혀 있으면 "레시피", "레시피는 댓글/프로필에" 같은 안내만 있으면 "안내", 요리 내용이 없으면 "없음".
 - comments_used: 실제로 레시피에 반영한 댓글 번호(예: "작성자 1", "시청자 3"). 안 썼으면 빈 배열.
 
@@ -47,7 +46,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
 - 같은 레시피 안에서 양념은 가능하면 같은 단위로 통일해 비율을 비교할 수 있게 한다.
 - grams/ml: 정밀 모드 참고값. 한국 가정 기준(밥숟가락 1 ≈ 10ml, 계량스푼 1큰술 = 15ml, 작은술 = 5ml, 종이컵 ≈ 180ml, 한 꼬집 ≈ 0.5g, 대파 1대 ≈ 100g, 양파 1개 ≈ 200g, 달걀 1개 ≈ 50g, 마늘 1쪽 ≈ 5g).
 - primary: "ml" 액체, "g" 고체·가루, "count" 달걀·통채소.
-- original: 자료에 적힌 원문 표현. sources: 이 레시피를 만든 근거 종류("caption","owner_comment","viewer_comment","onscreen_text","speech","visual").
+- original: 자료에 적힌 원문 표현(20자 이내, 없으면 생략). sources: 이 레시피를 만든 근거 종류("caption","owner_comment","viewer_comment","onscreen_text","speech","visual").
 
 [단계]
 - steps.text 안에서 재료는 반드시 [[재료번호]] 토큰(0부터, 그 레시피 ingredients 순서)으로 쓴다. 예: "팬에 [[0]]을 올려 굽는다".
@@ -62,7 +61,7 @@ ${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나�
 - tools: 에어프라이어, 토치, 체망, 특정 틀처럼 없을 수도 있는 도구만. 기본 도구는 넣지 않는다.
 - buy_keyword: 쇼핑 검색어.
 
-출력 JSON(이 키만):
+출력 JSON(이 키만, 값이 없거나 null인 키는 생략해도 된다):
 {"is_food":true,"reason":"","evidence":{"speech":"","onscreen_text":"","caption":"레시피|안내|없음","comments_used":[]},
 "recipes":[{"title":"","summary":"한 줄","servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","sources":["caption"],"assumptions":[""],
 "ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
@@ -71,6 +70,7 @@ ${hasVideo ? `- 장면 시점: 각 단계마다 영상에서 그 동작이 나�
 "nutrition_per_serving":{"kcal":0,"carb_g":0,"protein_g":0,"fat_g":0,"sugar_g":0,"sodium_mg":0},
 "beginner_notes":["최대 3개"]}]}
 
+자료: ${[caption ? '작성자 캡션' : null, owner.length ? `작성자 댓글 ${owner.length}개` : null, viewer.length ? `시청자 댓글 ${viewer.length}개` : null, hasVideo ? '릴스 영상(화면 + 음성)' : null, nImg ? `${fromVideo ? '영상에서 뽑은 장면' : '장면 스크린샷'} ${nImg}장` : null].filter(Boolean).join(', ')}
 ${link ? `릴스 링크: ${link}\n` : ''}[작성자 캡션]
 """
 ${caption || '(없음)'}
@@ -91,8 +91,11 @@ export function parseResult(text) {
 }
 
 // 댓글 형식 통일: 서버가 가져온 {text, owner, likes} 또는 예전 앱이 보낸 문자열
-const normComments = list => (Array.isArray(list) ? list : []).map(c => typeof c === 'string' ? { text: c, owner: false, likes: 0 } : c)
-  .filter(c => c && typeof c.text === 'string' && c.text.trim()).map(c => ({ text: c.text.slice(0, c.owner ? 2000 : 600), owner: !!c.owner, likes: +c.likes || 0 })).slice(0, 15);
+const normComments = list => {
+  const all = (Array.isArray(list) ? list : []).map(c => typeof c === 'string' ? { text: c, owner: false, likes: 0 } : c)
+    .filter(c => c && typeof c.text === 'string' && c.text.trim()).map(c => ({ text: c.text.slice(0, c.owner ? 2000 : 300), owner: !!c.owner, likes: +c.likes || 0 }));
+  return [...all.filter(c => c.owner).slice(0, 5), ...all.filter(c => !c.owner).slice(0, 8)];   // 시청자 댓글은 앞쪽(분량·좋아요 순) 8개만
+};
 const showComments = list => list.map(c => (c.owner ? '작성자: ' : '') + c.text);
 
 async function run(body, emit, t0) {
@@ -142,7 +145,8 @@ async function run(body, emit, t0) {
   const strongText = qtyCount(caption) >= 3 || comments.some(c => c.owner && qtyCount(c.text) >= 3);
   const visual = !!(video || images.length);
   const dur = duration || (video ? video.bytes / (350 * 1024) : 0);   // 길이를 모르면 용량으로 짐작
-  const fps = !video ? null : dur > 180 ? 0.33 : dur > 90 ? 0.5 : 1;
+  // 토큰 절약: 영상 토큰 = 장면 수 × (고화질 280 / 저화질 70). 자막은 보통 2초 이상 떠 있어서 2초에 1장이면 읽힌다.
+  const fps = !video ? null : strongText ? (dur > 60 ? 0.25 : 0.5) : dur > 180 ? 0.25 : dur > 90 ? 0.33 : dur > 30 ? 0.5 : 1;
   const JSONC = { responseMimeType: 'application/json' };
   const cfgs = strongText
     ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' }, meta: true },

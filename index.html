@@ -442,7 +442,7 @@ body.detail nav.tabs{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.3';
+const VERSION='v1.3.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -1582,9 +1582,9 @@ async function showUsage(){
     const cache=byM.cache;
     const rows=d.models.map(m=>{ const x=byM[m]||{calls:0,ok:0,busy:0,limited:0,tin:0,tout:0};
       return `<tr class="${x.exhausted?'ex':''}"><td>${esc(short(m))}${x.exhausted?' (오늘 소진)':''}</td><td>${x.calls}</td><td>${x.ok}</td><td>${x.busy}</td><td>${x.limited}</td><td>${Math.round(((x.tin||0)+(x.tout||0))/1000)}k</td></tr>`; }).join('');
-    const total=(d.rows||[]).filter(x=>x.model!=='cache').reduce((a,x)=>a+x.ok,0);
+    const real=(d.rows||[]).filter(x=>x.model!=='cache'), total=real.reduce((a,x)=>a+x.ok,0), tok=real.reduce((a,x)=>a+(x.tin||0)+(x.tout||0),0), avg=total?Math.round(tok/total/1000):0;
     ub.className=''; ub.innerHTML=`
-      <p style="font-size:.95rem">오늘 성공한 AI 요청 <b>${total}회</b>${cache?`, 저장된 분석으로 바로 보여준 것 <b>${cache.calls}회</b>(무료 사용량 안 씀)`:''}</p>
+      <p style="font-size:.95rem">오늘 성공한 AI 요청 <b>${total}회</b>${avg?`, 한 번에 평균 <b>${avg}k 토큰</b>`:''}${cache?`, 저장된 분석으로 바로 보여준 것 <b>${cache.calls}회</b>(무료 사용량 안 씀)`:''}</p>
       <table class="usage"><tr><th>모델</th><th>요청</th><th>성공</th><th>붐빔</th><th>한도</th><th>토큰</th></tr>${rows}</table>
       <p class="muted" style="font-size:.8rem;margin-top:12px">무료 한도는 모델마다 따로 있어서, 한 모델이 붐비거나 한도가 차면 아래 모델로 자동으로 넘어가요. 하루 한도는 ${kst(d.resetAt)}에 다시 채워져요.</p>
       <p class="muted" style="font-size:.8rem;margin-top:6px">Google은 정확한 무료 한도 숫자를 API로 알려주지 않아요. 모델별 한도와 남은 양은 AI Studio에서 볼 수 있어요.</p>
