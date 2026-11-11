@@ -314,7 +314,9 @@ async function readShareInbox(){
     S.tab='import'; S.recipe=null;
     if (video) await addVideo(video.b, video.name);
     if (imgs.length) await addImages(imgs);
-    S.shareNote = video ? 'video' : imgs.length ? 'image' : (m ? 'link' : 'text');
+    S.shareNote = video ? 'video' : imgs.length ? 'image' : (m ? '' : 'text');
+    history.replaceState(null,'','/');
+    if (m || video || imgs.length || S.caption) { render(); analyze(); return; }
   }catch(e){}
   history.replaceState(null,'','/');
   render();
@@ -339,8 +341,14 @@ function normalize(r){
   return r;
 }
 async function analyze(){
-  if (!S.caption.trim() && !S.images.length){ S.error='캡션을 붙여넣거나 사진·영상을 넣어 주세요.'; render(); return; }
-  S.busy=true; S.error=''; S.status='AI가 레시피를 읽는 중… (10~30초)'; render();
+  const igLink = /instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
+  if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
+  const auto = igLink && !S.images.length;
+  S.busy=true; S.error=''; S.shareNote='';
+  const steps = auto ? [[0,'📥 릴스 가져오는 중…'],[4000,'🎬 영상 보는 중… (화면 + 음성 분석)'],[16000,'🧮 g·ml로 계량 환산 중…'],[30000,'거의 다 됐어요… 영상이 길면 조금 더 걸려요']]
+                     : [[0,'AI가 레시피를 읽는 중…'],[12000,'🧮 g·ml로 계량 환산 중…']];
+  const timers = steps.map(([t,msg])=>setTimeout(()=>{ S.status=msg; const el=document.querySelector('.status'); if(el) el.textContent=msg; else if(t===0) render(); },t));
+  S.status=steps[0][1]; render();
   try{
     const images=[]; for (const x of S.images) images.push({mime:'image/jpeg', data: await blobToB64(x.blob)});
     const r = await fetch('/api/analyze', { method:'POST',
@@ -348,15 +356,16 @@ async function analyze(){
       body: JSON.stringify({caption:S.caption.trim(), link:S.link.trim(), images, fromVideo:S.fromVideo}) });
     const data = await r.json().catch(()=>({}));
     if (!r.ok){
+      if (data.error==='need_input'){ S.shareNote='link'; throw new Error('이 릴스는 자동으로 가져오지 못했어요. 캡션을 붙여넣거나 영상을 넣어 주세요.'); }
       const msg = {passcode:'앱 비밀번호가 맞지 않아요. ⚙️ 설정에서 입력해 주세요.', rate_limited:'Gemini 무료 사용량을 잠시 초과했어요. 1분 뒤 다시 시도해 주세요.',
         no_key:'서버에 GEMINI_API_KEY가 설정되지 않았어요. (Vercel 환경변수 확인)', bad_image:'사진 형식이나 크기를 처리하지 못했어요.', empty:'분석할 내용이 없어요.'}[data.error];
       throw new Error(msg || `분석 서버 오류 (${data.error||r.status}${data.message?': '+data.message:''})`);
     }
     const rec = normalize(parseJSON(data.text));
-    rec.source = {link:S.link.trim(), caption:S.caption.trim(), model:data.model};
+    rec.source = {link:S.link.trim(), caption:S.caption.trim()||(data.source&&data.source.caption)||'', model:data.model, gotVideo:!!(data.source&&data.source.gotVideo), auto:!!(data.source&&data.source.auto), frames:S.fromVideo};
     openRecipe(rec, null);
   }catch(e){ S.error = e.message && !/JSON/.test(e.message) ? e.message : '레시피를 정리하지 못했어요. 캡션을 더 붙여넣고 다시 시도해 보세요.'; }
-  finally{ S.busy=false; render(); }
+  finally{ timers.forEach(clearTimeout); S.busy=false; render(); }
 }
 
 /* ================= 렌더링 ================= */
@@ -375,7 +384,7 @@ const standalone = () => matchMedia('(display-mode: standalone)').matches;
 
 function viewImport(){
   const note = {
-    link:`📎 인스타 링크를 받았어요! 이제 캡션을 넣어 주세요.<br>① <a href="${esc(S.link)}" target="_blank" rel="noopener">릴스 열기</a> → ② 캡션 길게 눌러 복사 → ③ 아래에 붙여넣기<br><span style="color:#CDBFB5">더 정확하게: 릴스를 저장한 뒤 갤러리에서 영상을 공유하면 화면까지 분석해요.</span>`,
+    link:`📎 링크는 받았지만 내용을 자동으로 가져오지 못했어요.<br>① <a href="${esc(S.link)}" target="_blank" rel="noopener">릴스 열기</a> → ② 캡션 길게 눌러 복사 → ③ 아래에 붙여넣기<br><span style="color:#CDBFB5">더 정확하게: 릴스를 저장한 뒤 갤러리에서 영상을 공유하면 화면까지 분석해요.</span>`,
     video:`🎬 영상을 받아 장면 ${S.images.length}장을 뽑았어요. 캡션도 붙여넣으면 더 정확해져요.`,
     image:`🖼 사진 ${S.images.length}장을 받았어요.`, text:'📝 텍스트를 받았어요.'
   }[S.shareNote];
@@ -383,9 +392,12 @@ function viewImport(){
   ${!standalone() && installEvt ? `<div class="install"><div style="flex:1">📲 <b>앱으로 설치</b>하면 인스타 공유 메뉴에 "릴쿡"이 나타나요.</div><button class="btn sm" id="inst">설치</button></div>`:''}
   ${note?`<div class="banner">${note}</div>`:''}
   <h2>릴스를 레시피로 📥</h2>
-  <p class="muted">인스타에서 <b>공유 → 릴쿡</b>을 누르거나, 캡션을 복사해 붙여넣으세요. 초보도 따라 할 수 있게 g·ml 단위로 바꿔 드려요.</p>
-  <div class="card">
-    <label class="fl" style="margin-top:0">① 캡션 / 자막 텍스트</label>
+  <p class="muted">인스타에서 <b>공유하기 → 릴쿡</b>을 누르면 자동으로 분석해요. 또는 <b>링크 복사</b> 후 아래 버튼 한 번!</p>
+  <button class="btn pri" id="pasteGo" style="margin-top:12px;height:56px;font-size:16px" ${S.busy?'disabled':''}>📋 복사한 릴스 링크로 바로 분석</button>
+  ${S.busy?`<div class="card" style="text-align:center"><div class="spin" style="border-color:#F3E8DD;border-top-color:var(--acc);width:28px;height:28px;margin:6px auto 10px"></div><div class="status" style="margin:0;font-weight:700;color:var(--ink)">${esc(S.status)}</div>${S.link?`<div class="muted" style="font-size:12px;margin-top:6px;word-break:break-all">${esc(S.link)}</div>`:''}</div>`:''}
+  ${S.error&&!S.busy?`<div class="err">${esc(S.error)}</div>`:''}
+  <details class="card" ${S.shareNote==='link'||S.caption||S.images.length?'open':''}><summary style="font-weight:700;cursor:pointer">✍️ 직접 넣기 (캡션 · 사진 · 영상)</summary>
+    <label class="fl">① 캡션 / 자막 텍스트</label>
     <textarea id="cap" placeholder="릴스 캡션을 길게 눌러 복사 → 여기에 붙여넣기">${esc(S.caption)}</textarea>
     <div class="row" style="margin-top:8px"><button class="btn ghost sm" id="ex">예시 캡션 넣기</button></div>
     <label class="fl">② 영상 또는 장면 사진 (선택)</label>
@@ -396,9 +408,7 @@ function viewImport(){
     <label class="fl">③ 릴스 링크 (출처 기록용)</label>
     <input type="url" id="lnk" placeholder="https://www.instagram.com/reel/..." value="${esc(S.link)}">
     <div style="margin-top:16px"><button class="btn pri" id="go" ${S.busy?'disabled':''}>${S.busy?'<span class="spin"></span> 처리 중…':'✨ 레시피로 정리하기'}</button></div>
-    ${S.busy&&S.status?`<div class="status">${esc(S.status)}</div>`:''}
-    ${S.error?`<div class="err">${esc(S.error)}</div>`:''}
-  </div>
+  </details>
   <div class="card"><b style="font-size:14px">📏 계량 기준</b>
     <div class="guide"><div><b>1T</b>계량스푼 15ml</div><div><b>1t</b>계량스푼 5ml</div><div><b>1컵</b>계량컵 200ml</div></div>
     <p class="muted" style="font-size:12px;margin-top:8px">계량스푼이 없다면 주방 저울(g)이 가장 정확해요.</p></div>`;
@@ -417,6 +427,12 @@ function bindImport(){
   const cv=$('#clrV'); if(cv) cv.onclick=()=>{ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.fromVideo=false; render(); };
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.rm; URL.revokeObjectURL(S.images[i].url); S.images.splice(i,1); if(!S.images.length) S.fromVideo=false; render(); });
   $('#go').onclick=analyze;
+  $('#pasteGo').onclick=async()=>{
+    let t=''; try{ t=await navigator.clipboard.readText(); }catch(e){}
+    const m=(t||'').match(/https?:\/\/(www\.)?instagram\.com\/[^\s]+/i);
+    if(!m){ S.error = t? '복사한 내용에 인스타 링크가 없어요. 릴스에서 "링크 복사"를 먼저 눌러 주세요.' : '클립보드를 읽지 못했어요. 권한을 허용하거나 아래 링크 칸에 붙여넣어 주세요.'; render(); return; }
+    S.link=m[0]; S.caption=''; S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.fromVideo=false; analyze();
+  };
 }
 
 /* ---------- 레시피 상세 ---------- */
@@ -470,6 +486,7 @@ function viewRecipe(){
     <h1 style="margin-top:12px">${esc(r.emoji||'🍳')} ${esc(r.title)}</h1>
     <p class="muted" style="margin-top:4px">${esc(r.summary||'')}</p>
     <div class="meta"><span class="chip acc">⏱ ${esc(r.total_min||'?')}분</span><span class="chip">난이도 ${esc(r.difficulty||'-')}</span><span class="chip">재료 ${r.ingredients.length}개</span>
+    ${r.source&&r.source.gotVideo?'<span class="chip" style="color:#4C3BA8">🎬 영상+음성 분석</span>':r.source&&r.source.frames?'<span class="chip">🎞 장면 분석</span>':r.source&&r.source.auto?'<span class="chip">📝 캡션 분석</span>':''}
     ${r.confidence==='low'?'<span class="chip est">정확도 낮음</span>':r.confidence==='medium'?'<span class="chip est">일부 추정</span>':'<span class="chip" style="color:var(--ok)">정확도 높음</span>'}</div>
     ${r.assumptions.length?`<div class="note" style="margin-top:10px">🤔 ${r.assumptions.map(esc).join(' / ')}</div>`:''}
     ${r.source&&r.source.link?`<p style="margin-top:8px;font-size:12px"><a href="${esc(r.source.link)}" target="_blank" rel="noopener" style="color:var(--sub)">원본 릴스 보기 ↗</a></p>`:''}
@@ -582,7 +599,7 @@ $('#setBtn').onclick=()=>{
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel에 APP_PASSCODE를 정했다면 입력">
     <p class="muted" style="font-size:12px;margin-top:6px">내 Gemini 사용량을 다른 사람이 쓰지 못하게 막는 비밀번호예요.</p>
     <div class="row" style="margin-top:16px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
-    <p class="muted" style="font-size:12px;margin-top:16px">릴쿡 v0.1 · 1단계</p></div></div>`;
+    <p class="muted" style="font-size:12px;margin-top:16px">릴쿡 v0.2 · 자동 분석</p></div></div>`;
   $('#pwc').onclick=()=>$('#layer').innerHTML='';
   $('#pws').onclick=()=>{ S.pass=$('#pw').value.trim(); LS.set('rc_pass',S.pass); $('#layer').innerHTML=''; toast('저장했어요'); };
 };

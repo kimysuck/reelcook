@@ -1,14 +1,17 @@
 // Vercel 서버리스 함수: 앱 → (이 함수) → Gemini API
 // Gemini API 키는 Vercel 환경변수 GEMINI_API_KEY에만 있고, 폰(브라우저)에는 절대 전달되지 않습니다.
 
+import { fetchInstagram, shortcodeOf } from '../lib/instagram.js';
+
 export const config = { maxDuration: 60 };
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const MAX_IMAGES = 8;
 const MAX_IMAGE_B64 = 1_500_000; // 이미지 1장당 약 1.1MB까지
 
-function buildPrompt(caption, link, nImg, fromVideo) {
-  return `너는 요리 초보를 위한 레시피 정리 전문가다. 아래는 인스타그램 요리 릴스에서 가져온 자료다(캡션/자막 텍스트${nImg ? `, ${fromVideo ? '영상에서 순서대로 뽑은 장면' : '장면 스크린샷'} ${nImg}장` : ''}).
+function buildPrompt(caption, link, nImg, fromVideo, hasVideo) {
+  return `너는 요리 초보를 위한 레시피 정리 전문가다. 아래는 인스타그램 요리 릴스에서 가져온 자료다(캡션 텍스트${hasVideo ? ', 릴스 영상 원본(화면과 음성 모두 확인할 것)' : ''}${nImg ? `, ${fromVideo ? '영상에서 순서대로 뽑은 장면' : '장면 스크린샷'} ${nImg}장` : ''}).
+${hasVideo ? '영상 속 음성 설명, 화면 자막, 계량 장면을 꼼꼼히 확인해서 캡션에 없는 재료·분량·순서까지 채워라.\n' : ''}
 이 자료를 분석해 요리 초보가 그대로 따라 할 수 있도록 "정확한 수치"로 바꾼 레시피를 JSON으로만 출력하라.
 
 규칙:
@@ -56,10 +59,23 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'bad_image' });
     }
   }
-  if (!caption.trim() && !images.length) return res.status(400).json({ error: 'empty' });
+  // 링크만 왔으면 → 서버가 인스타에서 캡션 + 영상을 직접 가져온다 (자동 분석)
+  let ig = null, autoCaption = '';
+  if (shortcodeOf(link) && !fromVideo && !images.length) {
+    ig = await fetchInstagram(link).catch(() => null);
+    if (ig) autoCaption = ig.caption || '';
+  }
+  const fullCaption = [caption, autoCaption && autoCaption !== caption ? autoCaption : ''].filter(Boolean).join('\n\n').slice(0, 8000);
+  const hasVideo = !!(ig && ig.videoB64);
 
-  const parts = [{ text: buildPrompt(caption, link, images.length, fromVideo) }];
+  if (!fullCaption.trim() && !images.length && !hasVideo) {
+    return res.status(422).json({ error: 'need_input', notes: ig ? ig.notes : [] });
+  }
+
+  const parts = [{ text: buildPrompt(fullCaption, link, images.length, fromVideo, hasVideo) }];
+  if (hasVideo) parts.push({ inline_data: { mime_type: ig.videoMime, data: ig.videoB64 } });
   for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
+  const source = { auto: !!ig, gotCaption: !!autoCaption, gotVideo: hasVideo, caption: autoCaption.slice(0, 2000), notes: ig ? ig.notes : [] };
 
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
@@ -78,7 +94,7 @@ export default async function handler(req, res) {
     }
     const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
     if (!text) return res.status(502).json({ error: 'empty_answer' });
-    return res.status(200).json({ text, model: MODEL });
+    return res.status(200).json({ text, model: MODEL, source });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server' });
