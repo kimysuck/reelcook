@@ -146,9 +146,48 @@ details>summary::-webkit-details-marker{display:none}
 .shop a{font-size:.8rem;font-weight:900;text-decoration:none;padding:8px 10px;border-radius:10px;white-space:nowrap}
 .shop a.cp{background:#FFE3D3;color:#C2410C}
 .shop a.nv{background:#E2F4EA;color:#155C3C}
-.sticky-act{position:fixed;bottom:calc(78px + env(safe-area-inset-bottom));left:0;right:0;z-index:25;pointer-events:none}
-.sticky-act .wrap{display:flex;gap:10px;pointer-events:auto}
-.sticky-act .btn{flex:1;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.actbar{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.97);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:10px 0 calc(10px + env(safe-area-inset-bottom));transition:transform .25s ease}
+.actbar.hide{transform:translateY(110%)}
+.actbar .wrap{display:flex;gap:10px;align-items:center}
+.icb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:58px;min-height:52px;border-radius:14px;font-size:.7rem;color:var(--sub);font-weight:700}
+.icb .i{font-size:1.35rem;line-height:1.1}
+.icb.on{color:var(--accd)}
+body.detail{padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+body.detail nav.tabs{display:none}
+/* 시작 화면 */
+#splash{position:fixed;inset:0;z-index:200;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .35s ease, visibility .35s}
+#splash.out{opacity:0;visibility:hidden}
+#splash .w{display:flex;align-items:flex-end;font-weight:900;font-size:4.2rem;letter-spacing:-2px;line-height:1}
+#splash .ch{display:inline-block;opacity:0;transform:translateY(40px) scale(.6);animation:pop .55s cubic-bezier(.2,1.6,.4,1) forwards}
+#splash .ch.k{color:var(--acc);animation-delay:.18s}
+#splash .pan{font-size:3.4rem;margin-left:6px;opacity:0;animation:pan .7s ease .4s forwards}
+#splash .sz{color:var(--sub);font-size:.95rem;margin-top:14px;opacity:0;animation:fade .4s ease .75s forwards}
+#splash .steam{position:absolute;width:10px;height:10px;border-radius:50%;background:#F2C9AE;opacity:0;animation:steam 1.1s ease-out .6s forwards}
+@keyframes pop{to{opacity:1;transform:none}}
+@keyframes pan{0%{opacity:0;transform:rotate(-40deg) scale(.4)}60%{opacity:1;transform:rotate(12deg) scale(1.1)}80%{transform:rotate(-6deg)}100%{opacity:1;transform:rotate(0) scale(1)}}
+@keyframes fade{to{opacity:1}}
+@keyframes steam{0%{opacity:.8;transform:translateY(0) scale(.6)}100%{opacity:0;transform:translateY(-60px) scale(1.6)}}
+@media (prefers-reduced-motion: reduce){#splash *{animation-duration:.01s!important;animation-delay:0s!important}}
+/* 공유 · 피드 */
+.choice{display:flex;gap:14px;align-items:center;background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:16px;margin-top:10px;width:100%;text-align:left}
+.choice .i{font-size:1.8rem}
+.choice b{display:block;font-size:1.02rem}
+.choice span{font-size:.82rem;color:var(--sub)}
+.tabs2{display:flex;background:#F2E6DA;border-radius:14px;padding:4px;margin-top:14px}
+.tabs2 button{flex:1;min-height:44px;border-radius:11px;font-weight:500;color:var(--sub)}
+.tabs2 button.on{background:#fff;color:var(--ink);font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.chips{display:flex;gap:8px;margin-top:14px;overflow-x:auto}
+.chips button{min-height:38px;padding:0 14px;border-radius:99px;border:1.5px solid var(--line);background:#fff;font-size:.88rem;white-space:nowrap}
+.chips button.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:700}
+.rcard{display:flex;gap:14px;align-items:center;background:#FFF8F1;border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:10px}
+.rcard .em{width:56px;height:56px;border-radius:16px;background:var(--acc2);display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0}
+.kindtag{display:inline-block;font-size:.72rem;font-weight:900;padding:2px 8px;border-radius:6px;margin-left:auto}
+.kindtag.kt-recipe{background:#EAF2FF;color:#2350A8}.kindtag.kt-cook{background:var(--acc2);color:var(--accd)}
+.phwrap{position:relative}
+.flagged{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.72);color:#fff;font-size:.8rem;font-weight:700;padding:6px 10px;border-radius:10px}
+.avpick{display:flex;gap:12px;align-items:center;margin-top:8px}
+.avpick .big{width:76px;height:76px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:900;overflow:hidden;flex-shrink:0}
+.avpick .big img{width:100%;height:100%;object-fit:cover}
 
 /* 목록 */
 .rc{display:flex;gap:14px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:16px;margin:12px 0;cursor:pointer}
@@ -207,6 +246,9 @@ details>summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><div class="w"><span class="ch">릴</span><span class="ch k">쿡</span><span class="pan">🍳</span></div>
+  <span class="steam" style="left:calc(50% + 70px);top:calc(50% - 50px)"></span><span class="steam" style="left:calc(50% + 88px);top:calc(50% - 40px);animation-delay:.8s"></span>
+  <div class="sz">릴스를 레시피로</div></div>
 <header class="top"><div class="wrap">
   <div class="logo">릴<span>쿡</span> 🍳</div>
   <div class="row" style="gap:8px"><button class="pill" id="who" style="display:none"></button><button class="pill" id="setBtn">⚙️</button></div>
@@ -223,7 +265,11 @@ details>summary::-webkit-details-marker{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION = 'v0.8.1';
+const VERSION = 'v0.9';
+// 시작 애니메이션: 약 1.3초 뒤 사라짐 (공유로 열렸으면 짧게, 누르면 바로)
+(function(){ const sp=document.getElementById('splash'); if(!sp) return;
+  const quick=/[?&]share/.test(location.search); const end=()=>{ sp.classList.add('out'); setTimeout(()=>sp.remove(),400); };
+  sp.onclick=end; setTimeout(end, quick?700:1350); })();
 /* ================= 저장소 (계정 연동 전까지는 이 폰에만 저장) ================= */
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem(k); return v==null? d : JSON.parse(v); }catch(e){ return d; } },
@@ -483,6 +529,7 @@ async function analyze(opts={}){
 /* ================= 렌더링 ================= */
 function render(){
   playing=null;
+  document.body.classList.toggle('detail', !!S.recipe);
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab && !S.recipe));
   setAwake(S.busy || !!S.recipe || S.cooking);
   const app=$('#app');
@@ -645,11 +692,11 @@ function viewRecipe(){
     <div class="ctl"><button id="sm" aria-label="줄이기">−</button><b>${S.servings}</b><button id="sp" aria-label="늘리기">+</button></div></div>
   <div class="seg">${tabs.map(([t,l])=>`<button data-rt="${t}" class="${S.rtab===t?'on':''}">${l}</button>`).join('')}</div>
   ${body}
-  <div style="height:90px"></div>
-  <div class="sticky-act"><div class="wrap">
-    <button class="btn sec" id="save">${S.recipeSavedId?'✓ 저장됨':'📒 저장'}</button>
-    <button class="btn pri" id="cookBtn" style="flex:1.7">👩‍🍳 요리 시작</button>
-    ${sb?`<button class="btn sec" id="brag">📸</button>`:''}
+  <div style="height:20px"></div>
+  <div class="actbar" id="actbar"><div class="wrap">
+    <button class="icb ${S.recipeSavedId?'on':''}" id="save"><span class="i">${S.recipeSavedId?'📗':'📒'}</span>${S.recipeSavedId?'저장됨':'저장'}</button>
+    <button class="icb" id="shareBtn"><span class="i">📤</span>공유</button>
+    <button class="btn pri" id="cookBtn" style="flex:1;min-height:54px">👩‍🍳 요리 시작</button>
   </div></div>`;
 }
 function bindRecipe(){
@@ -669,7 +716,7 @@ function bindRecipe(){
   $('#save').onclick=saveRecipe;
   $('#cookBtn').onclick=()=>openCook(0);
   const ra=$('#reAnalyze'); if(ra) ra.onclick=()=>{ const l=S.recipe.source.link; stopAllTimers(); clearMedia(); S.recipe=null; S.tab='import'; resetInput(); S.link=l; analyze({noCache:true}); };
-  const sbtn=$('#brag'); if(sbtn) sbtn.onclick=()=>openComposer(S.recipe);
+  $('#shareBtn').onclick=()=>openShareSheet(S.recipe);
 }
 
 /* ---------- 단계별 장면 (영상 · 사진) ---------- */
@@ -784,6 +831,11 @@ async function restoreMedia(rec, id){
   if (rec.source && rec.source.videoUrl){ await prepareMedia(rec); if (S.media && S.media.status==='ready') persistMedia(id); }
 }
 
+/* ---------- 상세 화면 하단바 자동 숨김 ---------- */
+let lastY=0;
+window.addEventListener('scroll',()=>{ const bar=document.getElementById('actbar'); if(!bar) return; const y=window.scrollY;
+  if (y>lastY+8 && y>160) bar.classList.add('hide'); else if (y<lastY-8 || y<80) bar.classList.remove('hide'); lastY=y; },{passive:true});
+
 /* ---------- 타이머 ---------- */
 const T={}; let actx=null;
 function beep(){
@@ -827,7 +879,7 @@ function drawCook(){
       <button class="btn pri" id="cn">${cookIdx===n-1?'완성! 🎉':'다음 →'}</button></div></div>`;
   $('#cx').onclick=closeCook;
   $('#cp').onclick=()=>{ if(cookIdx>0){cookIdx--; playing=null; drawCook();} };
-  $('#cn').onclick=()=>{ if(cookIdx<n-1){cookIdx++; playing=null; drawCook();} else { closeCook(); if (sb) openComposer(S.recipe, true); else toast('🎉 완성! 수고했어요'); } };
+  $('#cn').onclick=()=>{ if(cookIdx<n-1){cookIdx++; playing=null; drawCook();} else { closeCook(); if (sb) openComposer(S.recipe, 'cook', true); else toast('🎉 완성! 수고했어요'); } };
   const ct=$('#ct'); if(ct) ct.onclick=()=>toggleTimer(cookIdx);
   bindScenes($('#layer'));
   const auto=$('#layer .scene[data-auto]'); if(auto) playScene(auto);
@@ -892,7 +944,7 @@ function renderWho(){
   const w=$('#who'); if (!w) return;
   if (!sb){ w.style.display='none'; return; }
   w.style.display='';
-  if (S.user){ const md=S.user.user_metadata||{}; w.innerHTML=`${avatarHTML(md.full_name||md.name, md.avatar_url)}<span>${esc((md.full_name||md.name||'나').split(' ')[0])}</span>`; w.onclick=()=>$('#setBtn').click(); }
+  if (S.user){ const pf=S.profile||{}; w.innerHTML=`${avatarHTML(pf.name, pf.avatar)}<span>${esc(pf.name||'…')}</span>`; w.onclick=()=>openProfile(false); }
   else { w.innerHTML=`${GLOGO}<span>로그인</span>`; w.onclick=signIn; }
 }
 async function initCloud(){
@@ -911,8 +963,8 @@ async function onSession(session){
   if (sessionUid===id) return; sessionUid=id; S.user=u;
   if (/[?&]code=/.test(location.search)) history.replaceState(null,'','/');
   renderWho();
-  if (u){ await migrateLocal(); await loadMyRecipes(); S.feed=null; }
-  else { S.my=LS.get('rc_recipes',[]); S.feed=null; }
+  if (u){ await loadProfile(); renderWho(); if (S.profile && !S.profile.setup_done) openProfile(true); await migrateLocal(); await loadMyRecipes(); S.feed=null; }
+  else { S.my=LS.get('rc_recipes',[]); S.feed=null; S.profile=null; }
   if (!S.busy && !S.recipe && !S.cooking) render();
 }
 async function loadMyRecipes(){
@@ -940,38 +992,144 @@ function photoUrl(path){ return path ? sb.storage.from('photos').getPublicUrl(pa
 function timeAgo(t){ const s=(Date.now()-Date.parse(t))/1000; if(s<60) return '방금'; if(s<3600) return `${Math.floor(s/60)}분 전`; if(s<86400) return `${Math.floor(s/3600)}시간 전`; if(s<86400*7) return `${Math.floor(s/86400)}일 전`; return new Date(t).toLocaleDateString('ko-KR'); }
 async function loadFeed(){
   S.feedErr='';
-  const {data,error}=await sb.from('posts').select('id,title,body,taste,photo_path,recipe,created_at,user_id,author:profiles!user_id(name,avatar),likes(count)').order('created_at',{ascending:false}).limit(50);
+  const {data,error}=await sb.from('posts').select('id,kind,flagged,title,body,taste,photo_path,recipe,created_at,user_id,author:profiles!user_id(name,avatar),likes(count)').order('created_at',{ascending:false}).limit(50);
   if (error){ S.feedErr=error.message; S.feed=[]; return; }
   S.feed=(data||[]).map(p=>({...p, profiles:p.author||p.profiles, likeCount:(p.likes&&p.likes[0]&&p.likes[0].count)||0}));
   const ids=S.feed.map(p=>p.id);
   if (ids.length){ const {data:mine}=await sb.from('likes').select('post_id').eq('user_id',S.user.id).in('post_id',ids); S.liked=new Set((mine||[]).map(x=>x.post_id)); }
 }
+async function authApi(path, body){
+  const {data}=await sb.auth.getSession(); const tok=data.session&&data.session.access_token;
+  const r=await fetch(path,{method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer '+tok}, body:JSON.stringify(body)});
+  return {r, data: await r.json().catch(()=>({}))};
+}
+// 모자이크: 작게 줄였다가 픽셀 그대로 키움 → 알아볼 수 없게
+async function mosaicOf(blob, cells=12){
+  const url=URL.createObjectURL(blob);
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url;});
+    const W=Math.min(800,img.width), H=Math.round(img.height*W/img.width);
+    const sm=document.createElement('canvas'); sm.width=cells; sm.height=Math.max(1,Math.round(cells*H/W)); sm.getContext('2d').drawImage(img,0,0,sm.width,sm.height);
+    const c=document.createElement('canvas'); c.width=W; c.height=H; const ctx=c.getContext('2d'); ctx.imageSmoothingEnabled=false; ctx.drawImage(sm,0,0,W,H);
+    return await new Promise(r=>c.toBlob(r,'image/jpeg',0.7));
+  } finally { URL.revokeObjectURL(url); }
+}
+const MOD_ERR={ busy:'검토 서버가 붐벼요. 잠시 후 다시 시도해 주세요.', moderation_failed:'사진 검토에 실패했어요. 다시 시도해 주세요.', login:'다시 로그인해 주세요.',
+  bad_text:'부적절한 표현이 있어서 올릴 수 없어요', bad_name:'이 닉네임은 쓸 수 없어요', name_len:'닉네임은 1~20자로 해주세요.', title_len:'제목은 1~60자로 해주세요.',
+  need_photo:'요리 인증은 사진이 필요해요.', need_recipe:'공유할 레시피를 골라 주세요.', save_failed:'저장하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+
+/* ---------- 프로필 ---------- */
+S.profile=null;
+async function loadProfile(){
+  const {data}=await sb.from('profiles').select('name,avatar,setup_done,avatar_flagged').eq('id',S.user.id).single();
+  S.profile=data||{name:'', avatar:null, setup_done:false};
+}
+let prof={};
+function openProfile(first){
+  const md=S.user.user_metadata||{}, pf=S.profile||{};
+  prof={ first, name: pf.name || md.full_name || md.name || '', mode: first ? (md.avatar_url?'google':'none') : 'keep', blob:null, url:null };
+  drawProfile();
+}
+function drawProfile(){
+  const md=S.user.user_metadata||{}, pf=S.profile||{};
+  const preview = prof.mode==='upload'&&prof.url ? prof.url : prof.mode==='google' ? md.avatar_url : prof.mode==='keep' ? pf.avatar : null;
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet">
+    <h3>${prof.first?'👋 반가워요! 프로필을 정해 주세요':'👤 프로필 편집'}</h3>
+    ${prof.first?'<p class="muted" style="margin-top:4px">피드에서 다른 사람에게 보이는 이름과 사진이에요.</p>':''}
+    <label class="fl">프로필 사진</label>
+    <div class="avpick"><div class="big">${preview?`<img src="${esc(preview)}" referrerpolicy="no-referrer" alt="">`:esc((prof.name||'?').slice(0,1))}</div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1">
+        <label class="btn ghost sm" for="avIn" style="cursor:pointer">📷 사진 고르기</label>
+        ${md.avatar_url?`<button class="btn ghost sm" id="avG">구글 사진 쓰기</button>`:''}
+        <button class="btn ghost sm" id="avN">기본 아이콘</button></div></div>
+    <input type="file" id="avIn" accept="image/*" class="hidden">
+    ${pf.avatar_flagged&&prof.mode==='keep'?'<div class="note" style="margin-top:10px">🚫 지금 사진은 부적절하다고 판단되어 모자이크 처리됐어요.</div>':''}
+    <label class="fl">닉네임 (1~20자)</label><input type="text" id="nn" maxlength="20" value="${esc(prof.name)}" placeholder="예: 자취요리왕">
+    <p class="muted" style="font-size:.78rem;margin-top:8px">🛡 올린 사진과 닉네임은 자동으로 검토돼요. 부적절한 사진은 모자이크 처리돼요.</p>
+    <div class="row" style="margin-top:16px">${prof.first?'':'<button class="btn ghost" style="flex:1" id="pfc">닫기</button>'}<button class="btn pri" style="flex:1" id="pfs">${prof.first?'시작하기':'저장'}</button></div>
+    ${prof.first?'':'<button class="btn ghost sm" id="logout2" style="margin-top:14px;width:100%">로그아웃</button>'}
+    <div id="pferr"></div></div></div>`;
+  const keep=()=>{ prof.name=$('#nn').value; };
+  $('#avIn').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; keep(); prof.blob=await shrink(f,640,0.85); if(prof.url) URL.revokeObjectURL(prof.url); prof.url=URL.createObjectURL(prof.blob); prof.mode='upload'; drawProfile(); };
+  const g=$('#avG'); if(g) g.onclick=()=>{ keep(); prof.mode='google'; drawProfile(); };
+  $('#avN').onclick=()=>{ keep(); prof.mode='none'; drawProfile(); };
+  const c=$('#pfc'); if(c) c.onclick=()=>$('#layer').innerHTML='';
+  const lo=$('#logout2'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
+  $('#pfs').onclick=saveProfile;
+}
+async function saveProfile(){
+  const btn=$('#pfs'), name=$('#nn').value.trim();
+  if (!name){ $('#pferr').innerHTML='<div class="err">닉네임을 적어 주세요.</div>'; return; }
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> 검토 중…';
+  const body={name};
+  if (prof.mode==='upload' && prof.blob){ body.photo=await blobToB64(prof.blob); body.mosaic=await blobToB64(await mosaicOf(prof.blob)); }
+  else if (prof.mode==='google') body.useGoogle=true;
+  else if (prof.mode==='none') body.clearAvatar=true;
+  const {r,data}=await authApi('/api/profile', body);
+  if (!r.ok){ btn.disabled=false; btn.textContent='다시 시도'; $('#pferr').innerHTML=`<div class="err">${esc(MOD_ERR[data.error]||'저장하지 못했어요')}${data.reason?` (${esc(data.reason)})`:''}</div>`; return; }
+  S.profile=data.profile; $('#layer').innerHTML=''; renderWho();
+  if (data.flagged) toast('🚫 사진이 부적절하다고 판단되어 모자이크 처리됐어요'); else toast('프로필을 저장했어요');
+  S.feed=null; if (!S.recipe && !S.busy) render();
+}
+
+/* ---------- 공유 시트 ---------- */
+function recipeText(r){
+  const k2=S.servings/r.servings;
+  return `🍳 ${r.title} (${S.servings}인분)\n\n[재료]\n${r.ingredients.map(i=>`- ${i.name} ${amountOf(i,k2).big}`).join('\n')}\n\n[만드는 법]\n${r.steps.map((st,i)=>`${i+1}. ${st.text.replace(/\[\[(\d+)\]\]/g,(m,x)=>{ const g=r.ingredients[+x]; return g?`${g.name} ${amountOf(g,k2).big}`:''; })}`).join('\n')}${r.source&&r.source.link?`\n\n원본: ${r.source.link}`:''}\n— 릴쿡으로 정리함`;
+}
+function openShareSheet(r){
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>📤 공유하기</h3>
+    ${sb?`<button class="choice" id="shR"><span class="i">📖</span><div><b>레시피만 공유</b><span>피드에 이 레시피를 올려요. 사진 없이 바로!</span></div></button>
+    <button class="choice" id="shC"><span class="i">📸</span><div><b>요리 인증</b><span>내가 만든 요리 사진 + 별점으로 자랑해요</span></div></button>`:''}
+    <button class="choice" id="shX"><span class="i">💬</span><div><b>카톡 등 다른 앱으로 보내기</b><span>재료와 순서를 글로 보내요</span></div></button>
+    <button class="btn ghost" style="width:100%;margin-top:14px" id="shClose">닫기</button></div></div>`;
+  $('#shClose').onclick=()=>$('#layer').innerHTML='';
+  const a=$('#shR'); if(a) a.onclick=()=>openComposer(r,'recipe');
+  const b=$('#shC'); if(b) b.onclick=()=>openComposer(r,'cook');
+  $('#shX').onclick=async()=>{ const text=recipeText(r);
+    try{ if (navigator.share){ await navigator.share({title:r.title, text}); $('#layer').innerHTML=''; return; } }catch(e){ if(e.name==='AbortError') return; }
+    try{ await navigator.clipboard.writeText(text); toast('레시피를 복사했어요. 카톡에 붙여넣기 하세요'); $('#layer').innerHTML=''; }catch(e){ toast('공유하지 못했어요'); } };
+}
+
+/* ---------- 자랑 피드 ---------- */
+S.feedFilter='all';
 function viewFeed(){
   if (!sb) return `<h2>자랑 피드 🔥</h2><div class="empty"><div class="big">🚧</div>서버에 Supabase 설정이 필요해요.</div>`;
   if (!S.user) return `<h2>자랑 피드 🔥</h2><div class="login-card"><b>내가 만든 요리를 자랑하고</b> 친구들 요리에 하트를 눌러 보세요.<div style="margin-top:12px">${gbtn()}</div></div>`;
   if (S.feed===null){ loadFeed().then(()=>{ if(S.tab==='feed'&&!S.recipe) render(); }); return `<h2>자랑 피드 🔥</h2><div class="empty">불러오는 중…</div>`; }
-  let h=`<div class="row" style="justify-content:space-between;margin-top:22px"><h2 style="margin:0">자랑 피드 🔥</h2><button class="btn ghost sm" id="fRefresh">↻ 새로고침</button></div>
-    <button class="btn pri" id="newPost" style="margin-top:14px">📸 내 요리 자랑하기</button>`;
+  let h=`<div class="row" style="justify-content:space-between;margin-top:22px"><h2 style="margin:0">자랑 피드 🔥</h2><button class="btn ghost sm" id="fRefresh">↻</button></div>
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="newCook" style="flex:1.3">📸 요리 인증</button><button class="btn sec" id="newRecipe" style="flex:1">📖 레시피 공유</button></div>
+    <div class="chips">${[['all','전체'],['cook','📸 요리 인증'],['recipe','📖 레시피']].map(([v,l])=>`<button data-ff="${v}" class="${S.feedFilter===v?'on':''}">${l}</button>`).join('')}</div>`;
   if (S.feedErr) h+=`<div class="err">피드를 불러오지 못했어요: ${esc(S.feedErr)}</div>`;
-  if (!S.feed.length) return h+`<div class="empty"><div class="big">🍽</div>아직 자랑글이 없어요. 첫 번째 주인공이 되어 보세요!</div>`;
-  return h+S.feed.map(p=>{ const pr=p.profiles||{}, liked=S.liked.has(p.id); return `<div class="post">
-    ${p.photo_path?`<img class="ph" src="${esc(photoUrl(p.photo_path))}" alt="" loading="lazy">`:`<div class="noph">${esc((p.recipe&&p.recipe.emoji)||'🍳')}</div>`}
-    <div class="bd"><div class="au">${avatarHTML(pr.name, pr.avatar)}<b style="color:var(--ink)">${esc(pr.name||'요리하는 사람')}</b> · ${timeAgo(p.created_at)}</div>
+  const list=S.feed.filter(p=>S.feedFilter==='all'||(p.kind||'cook')===S.feedFilter);
+  if (!list.length) return h+`<div class="empty"><div class="big">🍽</div>아직 글이 없어요. 첫 번째 주인공이 되어 보세요!</div>`;
+  return h+list.map(p=>{ const pr=p.profiles||{}, liked=S.liked.has(p.id), kind=p.kind||'cook', r=p.recipe;
+    const top = kind==='cook'
+      ? (p.photo_path?`<div class="phwrap"><img class="ph" src="${esc(photoUrl(p.photo_path))}" alt="" loading="lazy">${p.flagged?'<span class="flagged">🚫 부적절한 사진으로 판단되어 가려졌어요</span>':''}</div>`:`<div class="noph">${esc((r&&r.emoji)||'🍳')}</div>`)
+      : '';
+    return `<div class="post">${top}
+    <div class="bd"><div class="au">${avatarHTML(pr.name, pr.avatar)}<b style="color:var(--ink)">${esc(pr.name||'요리하는 사람')}</b> · ${timeAgo(p.created_at)}<span class="kindtag kt-${kind}">${kind==='cook'?'요리 인증':'레시피'}</span></div>
       <div class="tt">${esc(p.title)}</div>
-      ${p.taste?`<div class="stars">${'★'.repeat(p.taste)}${'☆'.repeat(5-p.taste)} <span class="muted" style="font-size:.78rem">맛 셀프 평가</span></div>`:''}
+      ${kind==='cook'&&p.taste?`<div class="stars">${'★'.repeat(p.taste)}${'☆'.repeat(5-p.taste)} <span class="muted" style="font-size:.78rem">맛 셀프 평가</span></div>`:''}
       ${p.body?`<div class="tx">${esc(p.body)}</div>`:''}
+      ${r?`<div class="rcard"><div class="em">${esc(r.emoji||'🍳')}</div><div style="flex:1;min-width:0"><b>${esc(r.title)}</b><div class="muted" style="font-size:.8rem">⏱ ${esc(r.total_min||'?')}분 · 재료 ${(r.ingredients||[]).length}개 · ${esc(r.difficulty||'')}</div></div></div>`:''}
       <div class="acts"><button class="like ${liked?'on':''}" data-like="${esc(p.id)}">${liked?'❤️':'🤍'} ${p.likeCount}</button>
-        ${p.recipe?`<button class="btn ghost sm" data-precipe="${esc(p.id)}">📖 레시피</button>`:''}
+        ${r?`<button class="btn ghost sm" data-precipe="${esc(p.id)}">📖 보기</button><button class="btn ghost sm" data-psave="${esc(p.id)}">📒 저장</button>`:''}
         ${p.user_id===S.user.id?`<button class="btn sm" style="margin-left:auto;color:#B5A69B" data-pdel="${esc(p.id)}">삭제</button>`:''}</div>
     </div></div>`; }).join('');
 }
 function bindFeed(){
   bindLogin();
-  const rf=$('#fRefresh'); if(rf) rf.onclick=async()=>{ S.feed=null; render(); };
-  const np=$('#newPost'); if(np) np.onclick=()=>openComposer(null);
+  const rf=$('#fRefresh'); if(rf) rf.onclick=()=>{ S.feed=null; render(); };
+  const nc=$('#newCook'); if(nc) nc.onclick=()=>openComposer(null,'cook');
+  const nr=$('#newRecipe'); if(nr) nr.onclick=()=>openComposer(null,'recipe');
+  document.querySelectorAll('[data-ff]').forEach(b=>b.onclick=()=>{ S.feedFilter=b.dataset.ff; render(); });
   document.querySelectorAll('[data-like]').forEach(b=>b.onclick=()=>toggleLike(b.dataset.like));
   document.querySelectorAll('[data-precipe]').forEach(b=>b.onclick=()=>{ const p=S.feed.find(x=>x.id===b.dataset.precipe); if(p&&p.recipe){ const rec=normalize(JSON.parse(JSON.stringify(p.recipe))); openRecipe(rec,null); prepareMedia(rec); } });
-  document.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>confirmBox('이 자랑글을 삭제할까요?', async()=>{
+  document.querySelectorAll('[data-psave]').forEach(b=>b.onclick=async()=>{ const p=S.feed.find(x=>x.id===b.dataset.psave); if(!p) return;
+    const {data,error}=await sb.from('recipes').insert({recipe:p.recipe, reel_code:reelCode(p.recipe.source&&p.recipe.source.link)}).select('id').single();
+    if (error){ toast('저장하지 못했어요'); return; } S.my.unshift({id:data.id, recipe:p.recipe, savedAt:Date.now()}); toast('📒 내 레시피에 저장했어요'); });
+  document.querySelectorAll('[data-pdel]').forEach(b=>b.onclick=()=>confirmBox('이 글을 삭제할까요?', async()=>{
     const p=S.feed.find(x=>x.id===b.dataset.pdel); const {error}=await sb.from('posts').delete().eq('id',p.id);
     if (error){ toast('삭제하지 못했어요'); return; }
     if (p.photo_path) sb.storage.from('photos').remove([p.photo_path]).catch(()=>{});
@@ -986,55 +1144,65 @@ async function toggleLike(id){
   if (error){ was?S.liked.add(id):S.liked.delete(id); p.likeCount+=was?1:-1; render(); toast('하트를 누르지 못했어요'); }
   likeBusy=false;
 }
+
+/* ---------- 글쓰기 (레시피 공유 / 요리 인증) ---------- */
 let comp={};
-function openComposer(recipe, fromCook){
+function openComposer(recipe, kind='cook', fromCook=false){
   if (!sb){ toast('서버 설정이 필요해요'); return; }
-  if (!S.user){ $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>${fromCook?'완성 축하해요! 🎉':'📸 자랑하기'}</h3><p class="muted" style="margin-top:6px">자랑하려면 로그인이 필요해요.</p><div style="margin-top:14px">${gbtn()}</div><button class="btn ghost" style="width:100%;margin-top:10px" id="cc">닫기</button></div></div>`; bindLogin(); $('#cc').onclick=()=>$('#layer').innerHTML=''; return; }
-  comp={blob:null, url:null, taste:0, recipe:recipe||null, fromCook:!!fromCook, title:recipe?recipe.title:'', body:''};
+  if (!S.user){ $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>${fromCook?'완성 축하해요! 🎉':'📤 공유하기'}</h3><p class="muted" style="margin-top:6px">피드에 올리려면 로그인이 필요해요.</p><div style="margin-top:14px">${gbtn()}</div><button class="btn ghost" style="width:100%;margin-top:10px" id="cc">닫기</button></div></div>`; bindLogin(); $('#cc').onclick=()=>$('#layer').innerHTML=''; return; }
+  comp={kind, blob:null, url:null, taste:0, recipe:recipe||null, fromCook, title:recipe?recipe.title:'', body:'', sel: recipe?'__cur':''};
   drawComposer();
 }
 function drawComposer(){
+  const cook=comp.kind==='cook';
   const opts=S.my.map(d=>`<option value="${esc(d.id)}">${esc(d.recipe&&d.recipe.title)}</option>`).join('');
   $('#layer').innerHTML=`<div class="modal"><div class="sheet">
-    <div class="row" style="justify-content:space-between"><h3>${comp.fromCook?'완성 축하해요! 🎉 자랑해 볼까요?':'📸 내 요리 자랑하기'}</h3><button id="cc" style="font-size:1.3rem;padding:4px 8px">✕</button></div>
-    <label class="fl">완성 사진</label>
-    ${comp.url?`<img src="${comp.url}" style="width:100%;border-radius:16px;max-height:340px;object-fit:cover"><button class="btn ghost sm" id="chgP" style="margin-top:8px">사진 바꾸기</button>`:`<label class="drop" for="pIn">📷 사진 찍기 / 고르기</label>`}
-    <input type="file" id="pIn" accept="image/*" class="hidden">
-    <label class="fl">어떤 레시피?</label>
+    <div class="row" style="justify-content:space-between"><h3>${comp.fromCook?'완성 축하해요! 🎉':'피드에 올리기'}</h3><button id="cc" style="font-size:1.3rem;padding:4px 8px" aria-label="닫기">✕</button></div>
+    <div class="tabs2"><button data-kind="recipe" class="${cook?'':'on'}">📖 레시피만 공유</button><button data-kind="cook" class="${cook?'on':''}">📸 요리 인증</button></div>
+    ${cook?`<label class="fl">완성 사진 (필수)</label>
+      ${comp.url?`<img src="${comp.url}" style="width:100%;border-radius:16px;max-height:340px;object-fit:cover"><button class="btn ghost sm" id="chgP" style="margin-top:8px">사진 바꾸기</button>`:`<label class="drop" for="pIn">📷 사진 찍기 / 고르기</label>`}
+      <input type="file" id="pIn" accept="image/*" class="hidden">`:''}
+    <label class="fl">${cook?'어떤 레시피로 만들었나요? (선택)':'공유할 레시피'}</label>
     <select id="rs" style="width:100%;min-height:50px;border:1.5px solid var(--line);border-radius:14px;padding:0 12px;background:#fff">
-      ${comp.recipe?`<option value="__cur" selected>${esc(comp.recipe.title)}</option>`:''}<option value="" ${comp.recipe?'':'selected'}>레시피 없이 올리기</option>${opts}</select>
-    <label class="fl">제목</label><input type="text" id="pt" maxlength="60" value="${esc(comp.title)}" placeholder="예: 첫 대패숙주볶음 성공!">
-    <label class="fl">맛 셀프 평가</label><div class="starpick row" style="gap:0">${[1,2,3,4,5].map(n=>`<button data-st="${n}" class="${comp.taste>=n?'on':''}">★</button>`).join('')}</div>
-    <label class="fl">한마디</label><textarea id="px" style="min-height:90px" maxlength="500" placeholder="간장을 조금 줄였더니 딱 좋았어요!">${esc(comp.body)}</textarea>
-    <div style="margin-top:16px"><button class="btn pri" id="pg">올리기</button></div><div id="perr"></div></div></div>`;
+      ${comp.recipe?`<option value="__cur">${esc(comp.recipe.title)}</option>`:''}<option value="">${cook?'레시피 없이 올리기':'— 골라 주세요 —'}</option>${opts}</select>
+    <label class="fl">제목</label><input type="text" id="pt" maxlength="60" value="${esc(comp.title)}" placeholder="${cook?'예: 첫 대패숙주볶음 성공!':'예: 자취생 10분 컷 레시피'}">
+    ${cook?`<label class="fl">맛 셀프 평가</label><div class="starpick row" style="gap:0">${[1,2,3,4,5].map(n=>`<button data-st="${n}" class="${comp.taste>=n?'on':''}">★</button>`).join('')}</div>`:''}
+    <label class="fl">한마디</label><textarea id="px" style="min-height:80px" maxlength="500" placeholder="${cook?'간장을 조금 줄였더니 딱 좋았어요!':'이 레시피 진짜 쉬워요. 꼭 해보세요!'}">${esc(comp.body)}</textarea>
+    <p class="muted" style="font-size:.78rem;margin-top:8px">🛡 올리는 사진과 글은 자동으로 검토돼요. 부적절한 사진은 모자이크 처리돼요.</p>
+    <div style="margin-top:14px"><button class="btn pri" id="pg">올리기</button></div><div id="perr"></div></div></div>`;
+  $('#rs').value=comp.sel;
   const keep=()=>{ comp.title=$('#pt').value; comp.body=$('#px').value; comp.sel=$('#rs').value; };
-  if (comp.sel!==undefined) $('#rs').value=comp.sel;
   $('#cc').onclick=()=>{ $('#layer').innerHTML=''; };
-  $('#pIn').onchange=async e=>{ const f=e.target.files[0]; if(!f) return; keep(); comp.blob=await shrink(f,1280,0.85); if(comp.url) URL.revokeObjectURL(comp.url); comp.url=URL.createObjectURL(comp.blob); drawComposer(); };
+  document.querySelectorAll('[data-kind]').forEach(b=>b.onclick=()=>{ keep(); comp.kind=b.dataset.kind; drawComposer(); });
+  const pin=$('#pIn'); if(pin) pin.onchange=async e=>{ const f=e.target.files[0]; if(!f) return; keep(); comp.blob=await shrink(f,1280,0.85); if(comp.url) URL.revokeObjectURL(comp.url); comp.url=URL.createObjectURL(comp.blob); drawComposer(); };
   const cp=$('#chgP'); if(cp) cp.onclick=()=>$('#pIn').click();
   document.querySelectorAll('[data-st]').forEach(b=>b.onclick=()=>{ comp.taste=+b.dataset.st; document.querySelectorAll('[data-st]').forEach(x=>x.classList.toggle('on', +x.dataset.st<=comp.taste)); });
+  $('#rs').onchange=()=>{ const v=$('#rs').value; if(!$('#pt').value.trim()){ const d=v==='__cur'?comp.recipe:(S.my.find(x=>x.id===v)||{}).recipe; if(d) $('#pt').value=d.title; } };
   $('#pg').onclick=submitPost;
 }
 async function submitPost(){
-  const btn=$('#pg'), title=$('#pt').value.trim();
-  if (!title){ $('#perr').innerHTML='<div class="err">제목을 적어 주세요.</div>'; return; }
-  btn.disabled=true; btn.innerHTML='<span class="spin"></span> 올리는 중…';
+  const btn=$('#pg'), title=$('#pt').value.trim(), cook=comp.kind==='cook', err=m=>{ $('#perr').innerHTML=`<div class="err">${esc(m)}</div>`; };
+  const sel=$('#rs').value; let recipe=null;
+  if (sel==='__cur') recipe=comp.recipe; else if (sel){ const d=S.my.find(x=>x.id===sel); recipe=d?d.recipe:null; }
+  if (cook && !comp.blob) return err('완성 사진을 넣어 주세요.');
+  if (!cook && !recipe) return err('공유할 레시피를 골라 주세요.');
+  if (!title) return err('제목을 적어 주세요.');
+  btn.disabled=true; btn.innerHTML='<span class="spin"></span> 검토하고 올리는 중…';
   try{
-    let photo_path=null;
-    if (comp.blob){ const path=`${S.user.id}/${Date.now()}.jpg`; const {error}=await sb.storage.from('photos').upload(path, comp.blob, {contentType:'image/jpeg'}); if (error) throw error; photo_path=path; }
-    const sel=$('#rs').value; let recipe=null;
-    if (sel==='__cur') recipe=comp.recipe; else if (sel){ const d=S.my.find(x=>x.id===sel); recipe=d?d.recipe:null; }
-    const {error}=await sb.from('posts').insert({title, body:$('#px').value.trim()||null, taste:comp.taste||0, photo_path, recipe});
-    if (error) throw error;
-    $('#layer').innerHTML=''; stopAllTimers(); clearMedia(); S.recipe=null; S.tab='feed'; S.feed=null; render(); toast('🔥 피드에 올렸어요!');
-  }catch(e){ btn.disabled=false; btn.textContent='올리기'; $('#perr').innerHTML=`<div class="err">올리지 못했어요: ${esc(e.message||'')}</div>`; }
+    const body={kind:comp.kind, title, body:$('#px').value.trim(), taste:comp.taste||0, recipe: recipe?JSON.parse(JSON.stringify(recipe)):null};
+    if (cook){ body.photo=await blobToB64(comp.blob); body.mosaic=await blobToB64(await mosaicOf(comp.blob)); }
+    const {r,data}=await authApi('/api/post', body);
+    if (!r.ok) throw new Error((MOD_ERR[data.error]||'올리지 못했어요')+(data.reason?` (${data.reason})`:''));
+    $('#layer').innerHTML=''; stopAllTimers(); clearMedia(); S.recipe=null; S.tab='feed'; S.feedFilter='all'; S.feed=null; render();
+    toast(data.flagged ? '🚫 사진이 부적절하다고 판단되어 모자이크 처리됐어요' : '🔥 피드에 올렸어요!');
+  }catch(e){ btn.disabled=false; btn.textContent='다시 올리기'; err(e.message||'올리지 못했어요'); }
 }
 
 /* ---------- 설정 ---------- */
 $('#setBtn').onclick=()=>{
   const opt=(name,cur,list)=>`<div class="opt">${list.map(([v,l])=>`<button data-${name}="${v}" class="${cur===v?'on':''}">${l}</button>`).join('')}</div>`;
-  const md=S.user&&S.user.user_metadata||{};
-  const acct = !sb ? '' : S.user ? `<label class="fl">계정</label><div class="row">${avatarHTML(md.full_name||md.name, md.avatar_url)}<div style="flex:1"><b>${esc(md.full_name||md.name||'')}</b><div class="muted" style="font-size:.8rem">${esc(S.user.email||'')}</div></div><button class="btn ghost sm" id="logout">로그아웃</button></div>` : `<label class="fl">계정</label>${gbtn()}`;
+  const pf=S.profile||{};
+  const acct = !sb ? '' : S.user ? `<label class="fl">계정</label><div class="row">${avatarHTML(pf.name, pf.avatar)}<div style="flex:1;min-width:0"><b>${esc(pf.name||'')}</b><div class="muted" style="font-size:.8rem">${esc(S.user.email||'')}</div></div><button class="btn ghost sm" id="editPf">프로필 편집</button></div><button class="btn ghost sm" id="logout" style="margin-top:8px">로그아웃</button>` : `<label class="fl">계정</label>${gbtn()}`;
   $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>⚙️ 설정</h3>${acct}
     <label class="fl">글자 크기</label>${opt('fs',S.fs,[['m','보통'],['l','크게'],['xl','아주 크게']])}
     <label class="fl">기본 분량 표시</label>${opt('un',S.unit,[['orig','🥄 영상 단위'],['precise','⚖️ g·ml']])}
@@ -1044,6 +1212,7 @@ $('#setBtn').onclick=()=>{
     <p class="muted" style="font-size:.8rem;margin-top:16px">릴쿡 ${VERSION}</p></div></div>`;
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ S.fs=b.dataset.fs; LS.set('rc_fs',S.fs); applyFs(); document.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
+  const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
   $('#pwc').onclick=()=>{ $('#layer').innerHTML=''; render(); };
   $('#pws').onclick=()=>{ S.pass=$('#pw').value.trim(); LS.set('rc_pass',S.pass); $('#layer').innerHTML=''; render(); toast('저장했어요'); };
