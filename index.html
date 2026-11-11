@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#F3F4F1">
+<meta name="theme-color" content="#D23B1F">
 <title>릴쿡 — 릴스를 레시피로</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-192.png">
@@ -12,11 +12,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-/* 릴쿡 디자인 — 사기 그릇 바탕 · 먹색 글씨 · 쑥색 주 동작 · 고추색은 불과 하트에만
-   제목·숫자: Black Han Sans (시장 간판체) / 본문: IBM Plex Sans KR */
+/* 릴쿡 디자인 v1.1 — 분식집 간판: 고추장 빨강 머리띠, 흰 밥상 바탕, 간장색 글씨
+   노른자 노랑은 양념 비율·강조, 애호박 초록은 '다 됐다'에만. 사진이 주인공.
+   제목·숫자: Black Han Sans / 본문: IBM Plex Sans KR */
 :root{
-  --bg:#F3F4F1; --paper:#FFFFFF; --ink:#1C2421; --ink2:#4A5650; --sub:#6E7A73; --line:#D7DBD4; --line2:#E7EAE4;
-  --ssuk:#2F5D50; --ssuk-d:#244A3F; --ssuk-t:#E3ECE7; --chili:#E2452B; --chili-t:#FBE6E1; --amber:#C98A12; --amber-t:#FAF0D9;
+  --bg:#FFFFFF; --paper:#FFFFFF; --ink:#2B1E18; --ink2:#5F4C42; --sub:#8D7C72; --line:#EBE0D5; --line2:#F5EEE7;
+  --pri:#D23B1F; --pri-d:#AF2C14; --pri-t:#FDEBE5; --hot:#D23B1F; --hot-t:#FDEBE5;
+  --yolk:#FFB81C; --yolk-d:#A86F00; --yolk-t:#FFF1CC; --herb:#3E8B3A; --herb-t:#E7F3E2;
+  --f1:#FFB81C; --f2:#F57C1F; --f3:#D23B1F;
   --fs:17px; --disp:"Black Han Sans", "IBM Plex Sans KR", sans-serif;
 }
 html.fs-l{--fs:19px} html.fs-xl{--fs:21px}
@@ -27,25 +30,28 @@ body{min-height:100vh;padding-bottom:calc(76px + env(safe-area-inset-bottom));li
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 input,textarea,select{font:inherit;color:inherit}
 a{color:inherit}
-:focus-visible{outline:2.5px solid var(--ssuk);outline-offset:2px;border-radius:6px}
+:focus-visible{outline:2.5px solid var(--pri);outline-offset:2px;border-radius:6px}
 .wrap{max-width:600px;margin:0 auto;padding:0 20px}
 .hidden{display:none!important}
 svg.ic{width:1.25em;height:1.25em;flex-shrink:0;vertical-align:-.22em}
 .disp{font-family:var(--disp);font-weight:400;letter-spacing:-.01em}
 
 /* 머리 · 아래 탭 */
-header.top{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1.5px solid var(--ink);padding-top:env(safe-area-inset-top)}
+header.top{position:sticky;top:0;z-index:20;background:var(--pri);color:#fff;padding-top:env(safe-area-inset-top)}
 header.top .wrap{display:flex;align-items:center;justify-content:space-between;height:56px}
 .logo{font-family:var(--disp);font-size:1.7rem;line-height:1;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
 .logo .gauge{height:16px}
-.pill{display:flex;align-items:center;gap:6px;font-size:.88rem;color:var(--ink2);padding:6px 4px;border-radius:8px}
+header .gauge i{background:rgba(255,255,255,.3)!important}
+header .gauge.g3 i:nth-child(1){background:#FFE08A!important}header .gauge.g3 i:nth-child(2){background:var(--yolk)!important}header .gauge.g3 i:nth-child(3){background:#fff!important}
+header :focus-visible{outline-color:#fff}
+.pill{display:flex;align-items:center;gap:6px;font-size:.88rem;color:#fff;padding:6px 4px;border-radius:8px}
 #setBtn{padding:6px}
 nav.tabs{position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--paper);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 nav.tabs .wrap{display:flex;height:64px;padding:0}
 nav.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:.74rem;color:var(--sub);position:relative}
 nav.tabs button .ic{width:24px;height:24px}
-nav.tabs button.on{color:var(--ink);font-weight:700}
-nav.tabs button.on::before{content:"";position:absolute;top:0;left:32%;right:32%;height:3px;background:var(--ssuk);border-radius:0 0 3px 3px}
+nav.tabs button.on{color:var(--pri);font-weight:700}
+nav.tabs button.on::before{content:"";position:absolute;top:0;left:32%;right:32%;height:3px;background:var(--pri);border-radius:0 0 3px 3px}
 
 /* 글자 */
 h2{font-family:var(--disp);font-weight:400;font-size:1.75rem;line-height:1.25;margin:26px 0 8px;letter-spacing:-.01em}
@@ -54,31 +60,31 @@ h2{font-family:var(--disp);font-weight:400;font-size:1.75rem;line-height:1.25;ma
 
 /* 버튼 */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:52px;padding:0 20px;border-radius:10px;font-weight:700;font-size:1rem;transition:background .15s}
-.btn.pri{background:var(--ssuk);color:#fff;width:100%}
-.btn.pri:active{background:var(--ssuk-d)}
+.btn.pri{background:var(--pri);color:#fff;width:100%}
+.btn.pri:active{background:var(--pri-d)}
 .btn.pri:disabled{opacity:.45}
-.btn.sec{background:var(--ssuk-t);color:var(--ssuk-d)}
+.btn.sec{background:var(--pri-t);color:var(--pri-d)}
 .btn.ghost{border:1.5px solid var(--line);background:var(--paper)}
 .btn.sm{min-height:40px;padding:0 14px;font-size:.88rem;border-radius:8px}
-.btn.link{min-height:auto;padding:0;color:var(--ssuk);text-decoration:underline;text-underline-offset:3px;font-weight:500}
+.btn.link{min-height:auto;padding:0;color:var(--pri);text-decoration:underline;text-underline-offset:3px;font-weight:500}
 .row{display:flex;gap:10px;align-items:center}
 
 /* 입력 */
 label.fl{display:block;font-weight:700;font-size:.92rem;margin:18px 0 8px}
 textarea,input[type=text],input[type=url],select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:13px 14px;background:var(--paper);font-size:1rem;outline:none}
-textarea:focus,input:focus,select:focus{border-color:var(--ssuk)}
+textarea:focus,input:focus,select:focus{border-color:var(--pri)}
 textarea{min-height:130px;resize:vertical}
-.drop{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #B9C2BB;border-radius:10px;padding:16px;color:var(--ink2);font-size:.92rem;background:var(--paper);cursor:pointer}
+.drop{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #D7C4B3;border-radius:10px;padding:16px;color:var(--ink2);font-size:.92rem;background:var(--paper);cursor:pointer}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .thumbs .t{position:relative;width:68px;height:90px;border-radius:6px;overflow:hidden}
 .thumbs .t img{width:100%;height:100%;object-fit:cover}
-.thumbs .t button{position:absolute;top:3px;right:3px;background:rgba(28,36,33,.75);color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.thumbs .t button{position:absolute;top:3px;right:3px;background:rgba(43,30,24,.75);color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center}
 .thumbs .t button .ic{width:14px;height:14px}
 
 /* 알림 */
-.err{border-left:4px solid var(--chili);background:var(--chili-t);color:#8E2414;padding:12px 14px;border-radius:0 8px 8px 0;font-size:.94rem;margin-top:16px}
-.note{border-left:4px solid var(--amber);background:var(--amber-t);color:#6B4A07;padding:10px 14px;border-radius:0 8px 8px 0;font-size:.9rem}
-.note.ok{border-color:var(--ssuk);background:var(--ssuk-t);color:var(--ssuk-d)}
+.err{border-left:4px solid var(--hot);background:var(--hot-t);color:#8E2414;padding:12px 14px;border-radius:0 8px 8px 0;font-size:.94rem;margin-top:16px}
+.note{border-left:4px solid var(--yolk-d);background:var(--yolk-t);color:#6B4A07;padding:10px 14px;border-radius:0 8px 8px 0;font-size:.9rem}
+.note.ok{border-color:var(--herb);background:var(--herb-t);color:#2A6427}
 .toast{position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:.92rem;z-index:300;max-width:88vw;text-align:center}
 .spin{width:20px;height:20px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;display:inline-block}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -88,9 +94,9 @@ details>summary::-webkit-details-marker{display:none}
 .sect>summary,.sect>.hd{display:flex;align-items:center;justify-content:space-between;padding:14px 0;font-weight:700}
 .sect>summary .ic{transition:transform .2s}
 .sect[open]>summary .ic{transform:rotate(180deg)}
-.banner{border:1.5px solid var(--ink);border-radius:10px;padding:14px 16px;margin-top:16px;font-size:.92rem;background:var(--paper)}
-.banner a{color:var(--ssuk);font-weight:700}
-.install{display:flex;gap:12px;align-items:center;border:1.5px solid var(--ssuk);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:.9rem;background:var(--paper)}
+.banner{border:1.5px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:16px;font-size:.92rem;background:var(--paper)}
+.banner a{color:var(--pri);font-weight:700}
+.install{display:flex;gap:12px;align-items:center;border:1.5px solid var(--pri);border-radius:10px;padding:12px 14px;margin-top:18px;font-size:.9rem;background:var(--paper)}
 .install .btn{flex-shrink:0;width:auto}
 .tips{margin-top:28px;color:var(--ink2);font-size:.9rem;border-top:1px solid var(--line);padding-top:14px}
 
@@ -98,8 +104,9 @@ details>summary::-webkit-details-marker{display:none}
 .gauge{display:inline-flex;align-items:flex-end;gap:3px;height:15px}
 .gauge i{display:block;width:5px;border-radius:1.5px;background:var(--line)}
 .gauge i:nth-child(1){height:45%}.gauge i:nth-child(2){height:72%}.gauge i:nth-child(3){height:100%}
-.gauge.g1 i:nth-child(-n+1),.gauge.g2 i:nth-child(-n+2),.gauge.g3 i:nth-child(-n+3){background:var(--chili)}
-.heat{display:inline-flex;align-items:center;gap:7px;font-size:.84rem;font-weight:700;color:var(--chili);margin-bottom:6px}
+.gauge i:nth-child(1){--c:var(--f1)}.gauge i:nth-child(2){--c:var(--f2)}.gauge i:nth-child(3){--c:var(--f3)}
+.gauge.g1 i:nth-child(-n+1),.gauge.g2 i:nth-child(-n+2),.gauge.g3 i:nth-child(-n+3){background:var(--c)}
+.heat{display:inline-flex;align-items:center;gap:7px;font-size:.84rem;font-weight:700;color:var(--hot);margin-bottom:6px}
 .heat.h0{color:var(--sub)}
 
 /* 진행 */
@@ -107,13 +114,13 @@ details>summary::-webkit-details-marker{display:none}
 .prog .gauge{height:34px;gap:6px}
 .prog .gauge i{width:11px;border-radius:3px;animation:fire 1.4s ease-in-out infinite}
 .prog .gauge i:nth-child(2){animation-delay:.18s}.prog .gauge i:nth-child(3){animation-delay:.36s}
-@keyframes fire{0%,100%{background:var(--line)}35%,65%{background:var(--chili)}}
-@media (prefers-reduced-motion: reduce){.prog .gauge i{animation:none;background:var(--chili)}}
+@keyframes fire{0%,100%{background:var(--line)}35%,65%{background:var(--c)}}
+@media (prefers-reduced-motion: reduce){.prog .gauge i{animation:none;background:var(--c)}}
 .prog-title{font-family:var(--disp);font-size:1.45rem;line-height:1.35;margin-top:18px}
 .prog-time{color:var(--sub);font-size:.9rem;margin-top:4px}
 .checks{margin-top:20px;border-top:1px solid var(--line)}
 .checks div{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2);font-size:.95rem}
-.checks .ok .ic{color:var(--ssuk)} .checks .no .ic{color:var(--amber)}
+.checks .ok .ic{color:var(--herb)} .checks .no .ic{color:var(--yolk-d)}
 .cap-peek{margin-top:14px;font-size:.85rem;color:var(--sub);max-height:7.5em;overflow:hidden;white-space:pre-wrap;border-left:3px solid var(--line);padding-left:12px}
 
 /* 레시피 머리 */
@@ -123,7 +130,7 @@ details>summary::-webkit-details-marker{display:none}
 .meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:.88rem;color:var(--ink2);align-items:center}
 .meta span{display:inline-flex;align-items:center;gap:5px}
 .chip{display:inline-flex;align-items:center;gap:5px}
-.chip.warn{color:var(--amber);font-weight:700}
+.chip.warn{color:var(--yolk-d);font-weight:700}
 .origin{margin-top:16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .origin summary{display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:.9rem;color:var(--ink2)}
 .origin .body{padding-bottom:14px;font-size:.88rem;white-space:pre-wrap}
@@ -139,48 +146,48 @@ details>summary::-webkit-details-marker{display:none}
 .seg button.on{color:var(--ink);font-weight:700;border-color:var(--ink)}
 .unitsw{display:flex;gap:16px;margin-top:16px;font-size:.88rem}
 .unitsw button{color:var(--sub);padding:4px 0;border-bottom:2px solid transparent}
-.unitsw button.on{color:var(--ssuk);font-weight:700;border-color:var(--ssuk)}
+.unitsw button.on{color:var(--pri);font-weight:700;border-color:var(--pri)}
 
 /* 재료: 레시피 노트처럼 점선으로 잇기 */
-.grp{font-weight:700;font-size:.9rem;color:var(--ssuk);margin:26px 0 2px}
+.grp{font-weight:700;font-size:.9rem;color:var(--pri);margin:26px 0 2px}
 .ing{padding:11px 0;border-bottom:1px solid var(--line2)}
 .ing .ln{display:flex;align-items:baseline;gap:8px}
 .ing .n{font-size:1.06rem;font-weight:500}
-.ing .dots{flex:1;border-bottom:2px dotted #B7C0B9;transform:translateY(-.3em);min-width:20px}
+.ing .dots{flex:1;border-bottom:2px dotted #D7C4B3;transform:translateY(-.3em);min-width:20px}
 .ing .big{font-family:var(--disp);font-size:1.3rem;white-space:nowrap}
 .ing .sub{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.8rem;color:var(--sub);margin-top:2px}
 .ing .prep{color:var(--ink2)}
-.est{color:var(--amber);font-weight:700}
-.ratio{background:var(--ssuk);color:#fff;border-radius:12px;padding:18px 18px 16px;margin-top:18px}
+.est{color:var(--yolk-d);font-weight:700}
+.ratio{background:var(--yolk);color:var(--ink);border-radius:12px;padding:18px 18px 16px;margin-top:18px}
 .ratio .rv{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap}
 .ratio .it{display:flex;flex-direction:column;align-items:center;min-width:46px}
 .ratio .it b{font-family:var(--disp);font-weight:400;font-size:2.4rem;line-height:1}
 .ratio .it span{font-size:.78rem;opacity:.85;margin-top:4px}
-.ratio .co{font-family:var(--disp);font-size:1.8rem;opacity:.5;padding-bottom:20px}
-.ratio p{font-size:.84rem;opacity:.9;margin-top:12px;border-top:1px solid rgba(255,255,255,.25);padding-top:10px}
+.ratio .co{font-family:var(--disp);font-size:1.8rem;opacity:.35;padding-bottom:20px}
+.ratio p{font-size:.84rem;margin-top:12px;border-top:1.5px dashed rgba(43,30,24,.3);padding-top:10px}
 .notes{margin-top:26px}
 .notes h4{font-size:.92rem;margin-bottom:6px}
 .notes li{margin:4px 0 4px 18px;font-size:.95rem;color:var(--ink2)}
 
 /* 조리 단계 */
 .stepc{display:grid;grid-template-columns:44px 1fr;gap:4px 12px;padding:22px 0;border-bottom:1px solid var(--line)}
-.no{font-family:var(--disp);font-size:2rem;line-height:1;color:var(--ssuk)}
+.no{font-family:var(--disp);font-size:2rem;line-height:1;color:var(--pri)}
 .stx{font-size:1.1rem;line-height:1.7}
-.stx b{font-weight:700;background:linear-gradient(transparent 62%, var(--amber-t) 62%)}
+.stx b{font-weight:700;background:linear-gradient(transparent 58%, #FFE29A 58%)}
 .cue,.tip,.mis{margin-top:10px;font-size:.92rem;line-height:1.55;display:grid;grid-template-columns:auto 1fr;gap:8px}
 .cue::before,.tip::before,.mis::before{font-weight:700;font-size:.8rem;padding-top:1px;white-space:nowrap}
-.cue::before{content:"이때 다음으로";color:var(--ssuk)}
+.cue::before{content:"이때 다음으로";color:var(--herb)}
 .tip::before{content:"팁";color:var(--ink2)}
-.mis::before{content:"주의";color:var(--chili)}
+.mis::before{content:"주의";color:var(--hot)}
 .timer{margin-top:12px;display:inline-flex;align-items:center;gap:10px;border:1.5px solid var(--ink);border-radius:10px;padding:7px 12px;font-size:1rem;font-variant-numeric:tabular-nums}
 .timer .tm{font-weight:700}
-.timer button{color:var(--ssuk);font-weight:700}
-.timer.done{border-color:var(--ssuk);background:var(--ssuk-t)}
-.scene{position:relative;margin-top:14px;border-radius:8px;overflow:hidden;background:#2B332F;aspect-ratio:4/3;max-width:420px;cursor:pointer}
+.timer button{color:var(--pri);font-weight:700}
+.timer.done{border-color:var(--herb);background:var(--herb-t)}
+.scene{position:relative;margin-top:14px;border-radius:8px;overflow:hidden;background:#2E2420;aspect-ratio:4/3;max-width:420px;cursor:pointer}
 .scene img,.scene video{width:100%;height:100%;object-fit:cover;display:block}
-.scene .play{position:absolute;left:10px;bottom:10px;display:flex;align-items:center;gap:6px;background:rgba(28,36,33,.8);color:#fff;font-size:.8rem;font-weight:700;padding:6px 10px;border-radius:6px}
-.scene .snd{position:absolute;right:10px;bottom:10px;background:rgba(28,36,33,.8);color:#fff;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.scene.sk{display:flex;align-items:center;justify-content:center;color:#B7C0B9;font-size:.84rem;cursor:default;aspect-ratio:auto;height:80px;gap:8px}
+.scene .play{position:absolute;left:10px;bottom:10px;display:flex;align-items:center;gap:6px;background:rgba(43,30,24,.8);color:#fff;font-size:.8rem;font-weight:700;padding:6px 10px;border-radius:6px}
+.scene .snd{position:absolute;right:10px;bottom:10px;background:rgba(43,30,24,.8);color:#fff;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.scene.sk{display:flex;align-items:center;justify-content:center;color:#C9B8AC;font-size:.84rem;cursor:default;aspect-ratio:auto;height:80px;gap:8px}
 
 /* 영양 */
 .kcal{display:flex;align-items:baseline;gap:8px;margin-top:22px}
@@ -190,15 +197,15 @@ details>summary::-webkit-details-marker{display:none}
 .nut .k{display:grid;grid-template-columns:5.5em 1fr 4.5em;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2);font-size:.95rem}
 .nut .v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .bar{height:6px;background:var(--line2);border-radius:3px;overflow:hidden}
-.bar i{display:block;height:100%;background:var(--ssuk)}
-.bar.hi i{background:var(--chili)}
+.bar i{display:block;height:100%;background:var(--herb)}
+.bar.hi i{background:var(--hot)}
 
 /* 장보기 */
 .shop{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line2)}
-.shop input{width:22px;height:22px;accent-color:var(--ssuk);flex-shrink:0}
+.shop input{width:22px;height:22px;accent-color:var(--herb);flex-shrink:0}
 .shop .nm{flex:1;font-size:1.02rem;line-height:1.4}
 .shop .nm small{display:block;color:var(--sub);font-size:.8rem}
-.shop.have .nm{color:#A5AEA8;text-decoration:line-through}
+.shop.have .nm{color:#B8A9A0;text-decoration:line-through}
 .shop a{font-size:.8rem;font-weight:700;text-decoration:none;padding:6px 9px;border-radius:6px;border:1.5px solid var(--line);white-space:nowrap}
 
 /* 레시피 하단 */
@@ -209,20 +216,34 @@ body.detail nav.tabs{display:none}
 .actbar .wrap{display:flex;gap:6px;align-items:center}
 .icb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:56px;min-height:52px;border-radius:8px;font-size:.72rem;color:var(--ink2);font-weight:700}
 .icb .ic{width:24px;height:24px}
-.icb.on{color:var(--ssuk)}
+.icb.on{color:var(--pri)}
 .actbar .btn.pri{flex:1;min-height:52px}
 
-/* 내 레시피 */
-.rc{display:flex;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line);cursor:pointer}
-.mono{width:52px;height:52px;border-radius:10px;background:var(--ssuk-t);color:var(--ssuk);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:1.6rem;flex-shrink:0}
-.rc .t{font-weight:700;font-size:1.05rem;line-height:1.35}
-.rc .s{display:flex;gap:10px;font-size:.82rem;color:var(--sub);margin-top:2px}
-.rc .del{color:#9AA59F;padding:8px}
+/* 내 레시피: 완성 장면 사진이 표지 */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px 12px;margin-top:16px}
+.tile{position:relative;cursor:pointer;min-width:0}
+.pic{aspect-ratio:4/5;border-radius:12px;overflow:hidden;background:var(--line2);display:block}
+.pic img,.pic svg{width:100%;height:100%;object-fit:cover;display:block}
+.tile .t{font-family:var(--disp);font-size:1.15rem;line-height:1.28;margin-top:9px}
+.tile .s{display:flex;gap:10px;font-size:.8rem;color:var(--sub);margin-top:2px}
+.tile .del{position:absolute;top:7px;right:7px;width:36px;height:36px;border-radius:50%;background:rgba(43,30,24,.55);color:#fff;display:flex;align-items:center;justify-content:center}
+.tile .del .ic{width:18px;height:18px}
+.recent{margin-top:30px}
+.recent h3{font-family:var(--disp);font-weight:400;font-size:1.3rem}
+.strip{display:flex;gap:10px;overflow-x:auto;margin:10px -20px 0;padding:0 20px 4px;scrollbar-width:none}
+.strip::-webkit-scrollbar{display:none}
+.strip .tile{flex:0 0 118px}
+.strip .t{font-size:.98rem}
+.hero{position:relative;margin:0 -20px;aspect-ratio:4/3;max-height:52vh;overflow:hidden;background:var(--line2)}
+.hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hero .back{position:absolute;top:12px;left:16px;margin:0;background:rgba(255,255,255,.92);color:var(--ink);padding:8px 14px 8px 10px;border-radius:20px;font-weight:700}
+.rcard .pic{width:64px;flex-shrink:0;border-radius:8px}
+
 .empty{padding:44px 0;color:var(--ink2)}
 .empty b{display:block;font-family:var(--disp);font-weight:400;font-size:1.35rem;color:var(--ink);margin-bottom:6px}
 
 /* 시트 · 요리 모드 */
-.modal{position:fixed;inset:0;z-index:50;background:rgba(28,36,33,.45);display:flex;align-items:flex-end;justify-content:center}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(43,30,24,.45);display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--bg);width:100%;max-width:600px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:22px 20px calc(26px + env(safe-area-inset-bottom))}
 .sheet h3{font-family:var(--disp);font-weight:400;font-size:1.5rem;line-height:1.3}
 .sheet .x{padding:6px;color:var(--ink2)}
@@ -230,31 +251,31 @@ body.detail nav.tabs{display:none}
 .opt button{flex:1;min-height:44px;font-size:.92rem}
 .opt button+button{border-left:1.5px solid var(--ink)}
 .opt button.on{background:var(--ink);color:#fff;font-weight:700}
-.cook{position:fixed;inset:0;z-index:60;background:#141A18;color:#F3F4F1;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
-.cook .top{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;font-size:.92rem;color:#B7C0B9}
-.cook .top button{color:#F3F4F1;display:flex;align-items:center;gap:4px;padding:6px}
-.cook .prog{height:4px;background:#2B332F;margin:0 20px;border-radius:2px;overflow:hidden}
-.cook .prog i{display:block;height:100%;background:#8FB8A8}
+.cook{position:fixed;inset:0;z-index:60;background:#1E1512;color:#FAF1E8;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.cook .top{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;font-size:.92rem;color:#C9B8AC}
+.cook .top button{color:#FAF1E8;display:flex;align-items:center;gap:4px;padding:6px}
+.cook .prog{height:4px;background:#3A2D27;margin:0 20px;border-radius:2px;overflow:hidden}
+.cook .prog i{display:block;height:100%;background:var(--yolk)}
 .cook .body{flex:1;overflow:auto;padding:22px 20px;max-width:640px;margin:0 auto;width:100%}
-.cook .sn{display:flex;align-items:center;gap:12px;font-size:.95rem;color:#B7C0B9}
-.cook .sn .disp{font-size:2.2rem;color:#F3F4F1}
+.cook .sn{display:flex;align-items:center;gap:12px;font-size:.95rem;color:#C9B8AC}
+.cook .sn .disp{font-size:2.2rem;color:#FAF1E8}
 .cook .heat{margin:0}
 .cook .st{font-size:1.55rem;line-height:1.6;margin-top:10px}
-.cook .st b{background:linear-gradient(transparent 62%, rgba(201,138,18,.45) 62%)}
-.cook .cue,.cook .tip,.cook .mis{font-size:1.02rem;color:#D9DFDA}
-.cook .cue::before{color:#8FB8A8}.cook .tip::before{color:#B7C0B9}.cook .mis::before{color:#F08A75}
+.cook .st b{background:linear-gradient(transparent 62%, rgba(255,184,28,.42) 62%)}
+.cook .cue,.cook .tip,.cook .mis{font-size:1.02rem;color:#EADDD2}
+.cook .cue::before{color:#9FD18F}.cook .tip::before{color:#C9B8AC}.cook .mis::before{color:#F08A75}
 .cook .nav{display:flex;gap:10px;padding:12px 20px calc(18px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto;width:100%}
 .cook .nav .btn{flex:1;min-height:62px;font-size:1.1rem}
-.cook .nav .prev{background:#2B332F;color:#F3F4F1}
-.cook .nav .btn.pri{background:#8FB8A8;color:#141A18}
+.cook .nav .prev{background:#3A2D27;color:#FAF1E8}
+.cook .nav .btn.pri{background:var(--yolk);color:#1E1512}
 .cook .scene{max-width:none;aspect-ratio:auto;height:32vh;margin:0 0 18px;background:#000}
 .cook .scene video,.cook .scene img{object-fit:contain}
 .bigtimer{margin-top:22px;font-family:var(--disp);font-size:3.6rem;line-height:1;font-variant-numeric:tabular-nums}
-.cook .tbtn{margin-top:10px;border:1.5px solid #4A5650;color:#F3F4F1;border-radius:10px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px}
-.awake{font-size:.8rem;color:#7E8A83;margin-top:24px;display:flex;align-items:center;gap:6px}
+.cook .tbtn{margin-top:10px;border:1.5px solid #5F4C42;color:#FAF1E8;border-radius:10px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px}
+.awake{font-size:.8rem;color:#9C8A7E;margin-top:24px;display:flex;align-items:center;gap:6px}
 
 /* 프로필 · 피드 */
-.av{width:30px;height:30px;border-radius:50%;background:var(--ssuk);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:.95rem;overflow:hidden;flex-shrink:0}
+.av{width:30px;height:30px;border-radius:50%;background:var(--yolk);color:var(--ink)!important;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:.95rem;overflow:hidden;flex-shrink:0}
 .av img{width:100%;height:100%;object-fit:cover}
 #who .av{width:28px;height:28px}
 .feedhd{display:flex;align-items:flex-end;justify-content:space-between;margin-top:26px}
@@ -271,20 +292,20 @@ body.detail nav.tabs{display:none}
 .post .tx{font-size:.98rem;margin-top:6px;white-space:pre-wrap;color:var(--ink2)}
 .post .acts{display:flex;gap:8px;margin-top:14px;align-items:center}
 .like{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:8px;border:1.5px solid var(--line);font-size:.95rem;font-weight:700;background:var(--paper)}
-.like.on{border-color:var(--chili);color:var(--chili)}
-.stars{color:var(--amber);letter-spacing:2px;margin-top:4px;font-size:.95rem}
+.like.on{border-color:var(--hot);color:var(--hot)}
+.stars{color:var(--yolk-d);letter-spacing:2px;margin-top:4px;font-size:.95rem}
 .starpick button{font-size:2rem;color:var(--line);padding:0 3px;line-height:1}
-.starpick button.on{color:var(--amber)}
+.starpick button.on{color:var(--yolk-d)}
 .kindtag{margin-left:auto;font-size:.76rem;font-weight:700}
-.kindtag.kt-recipe{color:#3D5A99}.kindtag.kt-cook{color:var(--ssuk)}
+.kindtag.kt-recipe{color:var(--yolk-d)}.kindtag.kt-cook{color:var(--pri)}
 .phwrap{position:relative}
-.flagged{position:absolute;left:10px;bottom:10px;background:rgba(28,36,33,.85);color:#fff;font-size:.78rem;font-weight:700;padding:6px 10px;border-radius:6px}
+.flagged{position:absolute;left:10px;bottom:10px;background:rgba(43,30,24,.85);color:#fff;font-size:.78rem;font-weight:700;padding:6px 10px;border-radius:6px}
 .rcard{display:flex;gap:14px;align-items:center;border:1.5px solid var(--ink);border-radius:10px;padding:12px;margin-top:12px;background:var(--paper)}
 .rcard .s{display:flex;gap:10px;font-size:.8rem;color:var(--sub);margin-top:2px}
-.login-card{border:1.5px solid var(--ssuk);border-radius:12px;padding:16px;margin:16px 0;background:var(--paper)}
+.login-card{border:1.5px solid var(--pri);border-radius:12px;padding:16px;margin:16px 0;background:var(--paper)}
 .gbtn{display:inline-flex;align-items:center;gap:10px;background:#fff;border:1.5px solid #C9CDD2;color:#1F1F1F;border-radius:10px;min-height:50px;padding:0 18px;font-weight:700;width:100%;justify-content:center}
 .choice{display:flex;gap:14px;align-items:center;border-bottom:1px solid var(--line);padding:16px 2px;width:100%;text-align:left}
-.choice .ic{width:28px;height:28px;color:var(--ssuk)}
+.choice .ic{width:28px;height:28px;color:var(--pri)}
 .choice b{display:block;font-size:1.02rem}
 .choice span{font-size:.84rem;color:var(--sub)}
 .tabs2{display:flex;margin-top:16px;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden}
@@ -292,21 +313,22 @@ body.detail nav.tabs{display:none}
 .tabs2 button+button{border-left:1.5px solid var(--ink)}
 .tabs2 button.on{background:var(--ink);color:#fff;font-weight:700}
 .avpick{display:flex;gap:16px;align-items:center;margin-top:8px}
-.avpick .big{width:84px;height:84px;border-radius:50%;background:var(--ssuk);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:2.2rem;overflow:hidden;flex-shrink:0}
+.avpick .big{width:84px;height:84px;border-radius:50%;background:var(--yolk);color:var(--ink);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:2.2rem;overflow:hidden;flex-shrink:0}
 .avpick .big img{width:100%;height:100%;object-fit:cover}
 .guard{display:flex;gap:8px;align-items:flex-start;font-size:.8rem;color:var(--sub);margin-top:12px}
 
 /* 시작 화면: 글자가 놓이고, 불이 한 칸씩 켜진다 */
-#splash{position:fixed;inset:0;z-index:400;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .3s ease, visibility .3s}
+#splash{position:fixed;inset:0;z-index:400;background:var(--pri);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .3s ease, visibility .3s}
 #splash.out{opacity:0;visibility:hidden}
 #splash .w{font-family:var(--disp);font-size:5rem;line-height:1;letter-spacing:-.03em;display:flex}
 #splash .ch{display:inline-block;opacity:0;transform:translateY(-28px);animation:drop .42s cubic-bezier(.3,1.5,.5,1) forwards}
 #splash .ch:nth-child(2){animation-delay:.14s}
 #splash .gauge{height:40px;gap:8px;margin-top:22px}
-#splash .gauge i{width:13px;border-radius:3px;animation:on .2s ease forwards}
+#splash .gauge i{width:13px;border-radius:3px;background:rgba(255,255,255,.28);animation:on .2s ease forwards}
+#splash .gauge i:nth-child(1){--c:#FFE08A}#splash .gauge i:nth-child(2){--c:var(--yolk)}#splash .gauge i:nth-child(3){--c:#fff}
 #splash .gauge i:nth-child(1){animation-delay:.55s}#splash .gauge i:nth-child(2){animation-delay:.72s}#splash .gauge i:nth-child(3){animation-delay:.89s}
 @keyframes drop{to{opacity:1;transform:none}}
-@keyframes on{to{background:var(--chili)}}
+@keyframes on{to{background:var(--c)}}
 @media (prefers-reduced-motion: reduce){#splash *{animation-duration:.01s!important;animation-delay:0s!important}}
 </style>
 </head>
@@ -328,7 +350,7 @@ body.detail nav.tabs{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION = 'v1.0';
+const VERSION='v1.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -345,7 +367,56 @@ const IC={
 const gauge=(n)=>`<span class="gauge g${n}" aria-hidden="true"><i></i><i></i><i></i></span>`;
 const HEATN={'약불':1,'중불':2,'강불':3};
 const heatHTML=(h)=> h&&h!=='없음' ? `<span class="heat ${HEATN[h]?'':'h0'}">${HEATN[h]?gauge(HEATN[h]):''}${esc(h)}</span>` : '';
-const monogram=(t)=>`<span class="mono" aria-hidden="true">${esc(String(t||'?').trim().slice(0,1))}</span>`;
+/* 사진이 없을 때의 표지: 요리 종류에 맞춘 작은 그림 */
+const ART={
+ soup:['#FBE1D6','<ellipse cx="50" cy="99" rx="30" ry="4" fill="#2B1E18" opacity=".1"/><path d="M40 52c-4-5 4-8 0-14M52 49c-4-5 4-8 0-14M64 52c-4-5 4-8 0-14" stroke="#D9A08C" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M17 66h66c0 19-14 31-33 31S17 85 17 66z" fill="#5A3A2A"/><ellipse cx="50" cy="66" rx="33" ry="8" fill="#3E271C"/><ellipse cx="50" cy="66" rx="29" ry="6" fill="#D9461F"/><rect x="36" y="62" width="7" height="6" rx="1" fill="#FFF7E8"/><rect x="52" y="64" width="7" height="5" rx="1" fill="#FFF7E8"/><path d="M60 63l7-2M44 68l6-1" stroke="#5DA34A" stroke-width="2.6" stroke-linecap="round"/>'],
+ noodle:['#FFEDBC','<ellipse cx="50" cy="99" rx="30" ry="4" fill="#2B1E18" opacity=".1"/><path d="M60 60L86 24M66 62L92 28" stroke="#8C5A2B" stroke-width="3.2" stroke-linecap="round"/><path d="M15 64h70c0 20-15 33-35 33S15 84 15 64z" fill="#fff"/><path d="M21 79h58" stroke="#D23B1F" stroke-width="3"/><ellipse cx="50" cy="64" rx="35" ry="8" fill="#F2C14E"/><path d="M23 64c4-4 8 4 12 0s8 4 12 0 8 4 12 0 8 4 12 0" stroke="#D3921A" stroke-width="2" fill="none"/><circle cx="38" cy="62" r="5.5" fill="#fff"/><circle cx="38" cy="62" r="2.6" fill="#FFB81C"/><path d="M58 61l8 1" stroke="#5DA34A" stroke-width="2.6" stroke-linecap="round"/>'],
+ rice:['#E3EFDA','<ellipse cx="50" cy="99" rx="30" ry="4" fill="#2B1E18" opacity=".1"/><path d="M50 43c-18 0-28 12-31 23h62c-3-11-13-23-31-23z" fill="#FFFDF6"/><g fill="#E9E0CC"><ellipse cx="42" cy="54" rx="2" ry="1"/><ellipse cx="55" cy="50" rx="2" ry="1"/><ellipse cx="60" cy="58" rx="2" ry="1"/><ellipse cx="35" cy="61" rx="2" ry="1"/></g><path d="M17 66h66c0 19-14 31-33 31S17 85 17 66z" fill="#7FA99B"/><path d="M24 74h52" stroke="#fff" stroke-width="2" opacity=".5"/>'],
+ pan:['#FFE5CF','<ellipse cx="46" cy="99" rx="30" ry="4" fill="#2B1E18" opacity=".1"/><path d="M68 62l25-15" stroke="#2E2A28" stroke-width="7" stroke-linecap="round"/><circle cx="45" cy="73" r="27" fill="#2E2A28"/><circle cx="45" cy="73" r="22" fill="#45403C"/><ellipse cx="39" cy="71" rx="9" ry="5.5" fill="#C9542A"/><ellipse cx="52" cy="78" rx="8" ry="5" fill="#B5461F"/><ellipse cx="47" cy="64" rx="6" ry="3.5" fill="#E9B44C"/><circle cx="55" cy="68" r="3" fill="#5DA34A"/><circle cx="36" cy="80" r="2.5" fill="#5DA34A"/>'],
+ sweet:['#FBDFE5','<ellipse cx="50" cy="99" rx="30" ry="4" fill="#2B1E18" opacity=".1"/><path d="M22 94h56V66L22 55z" fill="#F3D1A0"/><path d="M22 55l56 11v7L22 62z" fill="#fff"/><path d="M22 76l56 6" stroke="#E7849A" stroke-width="3.5"/><circle cx="60" cy="58" r="6" fill="#D9304A"/><path d="M60 52l2-4" stroke="#5DA34A" stroke-width="2.4" stroke-linecap="round"/>'],
+ plate:['#EEEFE2','<ellipse cx="50" cy="99" rx="34" ry="4" fill="#2B1E18" opacity=".1"/><ellipse cx="50" cy="80" rx="36" ry="15" fill="#fff"/><ellipse cx="50" cy="79" rx="25" ry="9.5" fill="#F3EEE7"/><ellipse cx="46" cy="75" rx="13" ry="6.5" fill="#C9542A"/><circle cx="58" cy="73" r="5" fill="#5DA34A"/><circle cx="39" cy="72" r="3.6" fill="#FFB81C"/><circle cx="52" cy="70" r="2.6" fill="#5DA34A"/>'],
+};
+function dishKind(r){ const t=String((r&&r.title)||'');
+  if (/케이크|쿠키|빵|디저트|푸딩|머핀|와플|팬케이크|토스트|라떼|스무디|음료|에이드|아이스크림|타르트|젤리|브라우니/.test(t)) return 'sweet';
+  if (/면|국수|라면|파스타|스파게티|우동|짜장|짬뽕|소바|라멘|누들/.test(t)) return 'noodle';
+  if (/국|찌개|탕|전골|수프|스튜|국밥|샤브/.test(t)) return 'soup';
+  if (/밥|김밥|리조또|카레|오므라이스|비빔|포케|초밥/.test(t)) return 'rice';
+  if (/볶음|구이|부침|전$|튀김|스테이크|조림|떡볶이|찜/.test(t)) return 'pan';
+  return 'plate'; }
+const dishArt=(r)=>{ const [bg,g]=ART[dishKind(r)]; return `<svg viewBox="0 0 100 125" aria-hidden="true"><rect width="100" height="125" fill="${bg}"/><g transform="translate(0 6)">${g}</g></svg>`; };
+const coverHTML=(r)=>`<span class="pic">${r&&r.cover?`<img src="${esc(r.cover)}" alt="" loading="lazy">`:dishArt(r)}</span>`;
+function lastBlob(list){ for(let i=(list||[]).length-1;i>=0;i--) if(list[i]) return list[i]; return null; }
+async function coverFrom(blob){
+  try{ const bmp=await createImageBitmap(blob); const W=360,H=450, c=document.createElement('canvas'); c.width=W; c.height=H;
+    const sc=Math.max(W/bmp.width,H/bmp.height), w=bmp.width*sc, h=bmp.height*sc;
+    c.getContext('2d').drawImage(bmp,(W-w)/2,(H-h)/2,w,h); bmp.close&&bmp.close(); return c.toDataURL('image/jpeg',.72); }catch(e){ return null; } }
+async function storeCover(id, cover){
+  const d=S.my.find(x=>x.id===id); if(!d||!d.recipe) return; d.recipe.cover=cover;
+  if (sb && S.user){ try{ await sb.from('recipes').update({recipe:d.recipe}).eq('id',id); }catch(e){} }
+  else { const l=LS.get('rc_recipes',[]); const x=l.find(y=>y.id===id); if(x){ x.recipe.cover=cover; LS.set('rc_recipes',l); } }
+}
+async function ensureCover(m){
+  const rec=S.recipe; if(!rec || rec.cover) return;
+  const b=lastBlob(m.thumbBlobs); if(!b) return;
+  const c=await coverFrom(b); if(!c || S.recipe!==rec || rec.cover) return;
+  rec.cover=c; if(S.recipeSavedId) storeCover(S.recipeSavedId,c);
+  if(!S.cooking && !playing) render();
+}
+const coverTried=new Set();
+async function backfillCovers(){
+  for (const d of S.my.slice()){
+    if (!d.recipe || d.recipe.cover || coverTried.has(d.id)) continue; coverTried.add(d.id);
+    let saved=null; try{ saved=await IDB.get(d.id); }catch(e){}
+    const b=saved&&lastBlob(saved.thumbs); if(!b) continue;
+    const c=await coverFrom(b); if(!c) continue;
+    await storeCover(d.id,c);
+    document.querySelectorAll(`[data-open="${CSS.escape(d.id)}"] .pic`).forEach(el=>el.innerHTML=`<img src="${c}" alt="">`);
+  }
+}
+function openSaved(id){ const d=S.my.find(x=>x.id===id); if(!d) return; const rec=normalize(JSON.parse(JSON.stringify(d.recipe))); openRecipe(rec, d.id); restoreMedia(rec, d.id); }
+const tileHTML=(d,del=true)=>{ const r=d.recipe||{}; return `<div class="tile" data-open="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(r.title)}">${coverHTML(r)}
+  <div class="t">${esc(r.title)}</div><div class="s"><span>${esc(r.total_min||'?')}분</span><span>${esc(r.servings)}인분</span></div>
+  ${del?`<button class="del" data-del="${esc(d.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>`; };
 // 시작 애니메이션: 약 1.3초 뒤 사라짐 (공유로 열렸으면 짧게, 누르면 바로)
 (function(){ const sp=document.getElementById('splash'); if(!sp) return;
   const quick=/[?&]share/.test(location.search); const end=()=>{ sp.classList.add('out'); setTimeout(()=>sp.remove(),400); };
@@ -675,6 +746,7 @@ function viewImport(){
     <input type="url" id="lnk" placeholder="https://www.instagram.com/reel/..." value="${esc(S.link)}">
     <div style="margin-top:18px"><button class="btn pri" id="go">레시피로 정리하기</button></div>
   </details>
+  ${S.my.length?`<div class="recent"><h3>최근 저장한 요리</h3><div class="strip">${S.my.slice(0,8).map(d=>tileHTML(d,false)).join('')}</div></div>`:''}
   <div class="tips"><b>공유 메뉴에서 바로 찾기</b><br>인스타 공유하기 화면에서 릴쿡 아이콘을 길게 눌러 고정하면 항상 맨 앞에 나와요. 안드로이드 11 이상에서 돼요.</div>`;
 }
 function bindImport(){
@@ -690,7 +762,7 @@ function bindImport(){
   };
   const cv=$('#clrV'); if(cv) cv.onclick=()=>{ S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.fromVideo=false; S.videoBlob=null; S.frameTimes=null; render(); };
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.rm; URL.revokeObjectURL(S.images[i].url); S.images.splice(i,1); if(!S.images.length) S.fromVideo=false; render(); });
-  $('#go').onclick=analyze;
+  $('#go').onclick=analyze; bindTiles(); backfillCovers();
   const rt=$('#retry'); if(rt) rt.onclick=analyze;
   $('#pasteGo').onclick=async()=>{
     let t=''; try{ t=await navigator.clipboard.readText(); }catch(e){}
@@ -756,7 +828,7 @@ function viewRecipe(){
   const src=r.source||{};
   const conf = r.confidence==='low'?'<span class="chip warn">추정이 많아요</span>':r.confidence==='medium'?'<span class="chip warn">일부 추정</span>':'';
   return `<div class="rhead">
-    <button class="back" id="back">${IC.back}뒤로</button>
+    ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button></div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
     <div class="meta"><span>${IC.clock}${esc(r.total_min||'?')}분</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}${conf}${src.cached?'<span>저장된 분석</span>':''}</div>
@@ -866,7 +938,7 @@ async function makeThumbs(url, steps){
   v.removeAttribute('src'); v.load();
   return out;
 }
-function mediaReady(m){ if (m.dead) return; m.status='ready'; m.thumbs=(m.thumbBlobs||[]).map(b=>b?URL.createObjectURL(b):null); if (S.recipe && S.media===m && !playing){ if (S.cooking) drawCook(); else render(); } }
+function mediaReady(m){ if (m.dead) return; m.status='ready'; m.thumbs=(m.thumbBlobs||[]).map(b=>b?URL.createObjectURL(b):null); ensureCover(m); if (S.recipe && S.media===m && !playing){ if (S.cooking) drawCook(); else render(); } }
 async function prepareMedia(rec, {videoBlob=null, shotBlobs=null}={}){
   if (!rec.steps.some(hasScene)) return;
   const m={status:'loading', pct:0}; S.media=m;
@@ -989,23 +1061,20 @@ function viewBox(){
   const head = `<h2>내 레시피</h2>`;
   if (S.myLoading) return head+login+`<p class="muted">불러오는 중…</p>`;
   if (!S.my.length) return head+login+`<div class="empty"><b>아직 저장한 레시피가 없어요</b>릴스를 공유해서 레시피를 만들고 저장을 누르면 여기에 모여요.</div>`;
-  return head+login+`<p class="muted">${S.my.length}개, ${S.user?'계정에 저장됨':'이 폰에만 저장됨'}</p>` + S.my.map(d=>{ const r=d.recipe||{}; return `
-    <div class="rc" data-open="${esc(d.id)}" role="button" tabindex="0">${monogram(r.title)}<div style="flex:1;min-width:0">
-    <div class="t">${esc(r.title)}</div><div class="s"><span>${esc(r.total_min||'?')}분</span><span>${esc(r.servings)}인분</span><span>재료 ${(r.ingredients||[]).length}개</span></div></div>
-    <button class="del" data-del="${esc(d.id)}" aria-label="삭제">${IC.trash}</button></div>`; }).join('');
+  return head+login+`<p class="muted">${S.my.length}개, ${S.user?'계정에 저장됨':'이 폰에만 저장됨'}</p>` + `<div class="grid">${S.my.map(d=>tileHTML(d)).join('')}</div>`;
 }
 function bindBox(){
-  bindLogin();
-  document.querySelectorAll('[data-open]').forEach(b=>b.onclick=e=>{ if(e.target.closest('[data-del]')) return;
-    const d=S.my.find(x=>x.id===b.dataset.open); if(d){ const rec=normalize(JSON.parse(JSON.stringify(d.recipe))); openRecipe(rec, d.id); restoreMedia(rec, d.id); } });
+  bindLogin(); bindTiles(); backfillCovers();
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); confirmBox('이 레시피를 삭제할까요?', async()=>{
     const id=b.dataset.del;
     if (sb && S.user){ const {error}=await sb.from('recipes').delete().eq('id',id); if(error){ toast('삭제하지 못했어요'); return; } }
     else LS.set('rc_recipes', LS.get('rc_recipes',[]).filter(x=>x.id!==id));
     S.my=S.my.filter(x=>x.id!==id); IDB.del(id).catch(()=>{}); render(); toast('삭제했어요'); }); });
 }
+function bindTiles(){ document.querySelectorAll('[data-open]').forEach(b=>{ const go=()=>openSaved(b.dataset.open);
+  b.onclick=e=>{ if(e.target.closest('[data-del]')) return; go(); }; b.onkeydown=e=>{ if(e.key==='Enter'&&e.target===b) go(); }; }); }
 function confirmBox(msg, ok, yes='삭제'){
-  $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>${esc(msg)}</h3><div class="row" style="margin-top:20px"><button class="btn ghost" style="flex:1" id="no">취소</button><button class="btn pri" style="flex:1;background:var(--chili)" id="yes">${esc(yes)}</button></div></div></div>`;
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet"><h3>${esc(msg)}</h3><div class="row" style="margin-top:20px"><button class="btn ghost" style="flex:1" id="no">취소</button><button class="btn pri" style="flex:1;background:var(--hot)" id="yes">${esc(yes)}</button></div></div></div>`;
   $('#no').onclick=()=>$('#layer').innerHTML=''; $('#yes').onclick=()=>{ $('#layer').innerHTML=''; ok(); };
 }
 /* ---------- 계정 (Supabase) ---------- */
@@ -1186,16 +1255,16 @@ function viewFeed(){
   return h+list.map(p=>{ const pr=p.profiles||{}, liked=S.liked.has(p.id), kind=p.kind||'cook', r=p.recipe;
     const top = kind==='cook'
       ? (p.photo_path?`<div class="phwrap"><img class="ph" src="${esc(photoUrl(p.photo_path))}" alt="" loading="lazy">${p.flagged?'<span class="flagged">부적절한 사진으로 판단되어 가렸어요</span>':''}</div>`:'')
-      : '';
+      : (r&&r.cover?`<div class="phwrap"><img class="ph" src="${esc(r.cover)}" alt="" loading="lazy" style="aspect-ratio:4/5"></div>`:'');
     return `<div class="post"><div class="au">${avatarHTML(pr.name, pr.avatar)}<b>${esc(pr.name||'요리하는 사람')}</b><span>${timeAgo(p.created_at)}</span><span class="kindtag kt-${kind}">${kind==='cook'?'요리 인증':'레시피'}</span></div>${top}
     <div class="bd">
       <div class="tt">${esc(p.title)}</div>
       ${kind==='cook'&&p.taste?`<div class="stars" aria-label="맛 ${p.taste}점">${'★'.repeat(p.taste)}<span style="color:var(--line)">${'★'.repeat(5-p.taste)}</span></div>`:''}
       ${p.body?`<div class="tx">${esc(p.body)}</div>`:''}
-      ${r?`<div class="rcard">${monogram(r.title)}<div style="flex:1;min-width:0"><b>${esc(r.title)}</b><div class="s"><span>${esc(r.total_min||'?')}분</span><span>재료 ${(r.ingredients||[]).length}개</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}</div></div></div>`:''}
+      ${r?`<div class="rcard">${coverHTML(r)}<div style="flex:1;min-width:0"><b>${esc(r.title)}</b><div class="s"><span>${esc(r.total_min||'?')}분</span><span>재료 ${(r.ingredients||[]).length}개</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}</div></div></div>`:''}
       <div class="acts"><button class="like ${liked?'on':''}" data-like="${esc(p.id)}" aria-label="하트">${liked?IC.heartOn:IC.heart}${p.likeCount}</button>
         ${r?`<button class="btn ghost sm" data-precipe="${esc(p.id)}">레시피 보기</button><button class="btn ghost sm" data-psave="${esc(p.id)}" aria-label="내 레시피에 저장">${IC.save}</button>`:''}
-        ${p.user_id===S.user.id?`<button class="del" style="margin-left:auto;color:#9AA59F;padding:8px" data-pdel="${esc(p.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>
+        ${p.user_id===S.user.id?`<button class="del" style="margin-left:auto;color:#B8A9A0;padding:8px" data-pdel="${esc(p.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>
     </div></div>`; }).join('');
 }
 function bindFeed(){
