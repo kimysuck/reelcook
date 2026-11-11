@@ -223,7 +223,7 @@ details>summary::-webkit-details-marker{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION = 'v0.8';
+const VERSION = 'v0.8.1';
 /* ================= 저장소 (계정 연동 전까지는 이 폰에만 저장) ================= */
 const LS = {
   get(k, d){ try{ const v=localStorage.getItem(k); return v==null? d : JSON.parse(v); }catch(e){ return d; } },
@@ -940,9 +940,9 @@ function photoUrl(path){ return path ? sb.storage.from('photos').getPublicUrl(pa
 function timeAgo(t){ const s=(Date.now()-Date.parse(t))/1000; if(s<60) return '방금'; if(s<3600) return `${Math.floor(s/60)}분 전`; if(s<86400) return `${Math.floor(s/3600)}시간 전`; if(s<86400*7) return `${Math.floor(s/86400)}일 전`; return new Date(t).toLocaleDateString('ko-KR'); }
 async function loadFeed(){
   S.feedErr='';
-  const {data,error}=await sb.from('posts').select('id,title,body,taste,photo_path,recipe,created_at,user_id,profiles(name,avatar),likes(count)').order('created_at',{ascending:false}).limit(50);
+  const {data,error}=await sb.from('posts').select('id,title,body,taste,photo_path,recipe,created_at,user_id,author:profiles!user_id(name,avatar),likes(count)').order('created_at',{ascending:false}).limit(50);
   if (error){ S.feedErr=error.message; S.feed=[]; return; }
-  S.feed=(data||[]).map(p=>({...p, likeCount:(p.likes&&p.likes[0]&&p.likes[0].count)||0}));
+  S.feed=(data||[]).map(p=>({...p, profiles:p.author||p.profiles, likeCount:(p.likes&&p.likes[0]&&p.likes[0].count)||0}));
   const ids=S.feed.map(p=>p.id);
   if (ids.length){ const {data:mine}=await sb.from('likes').select('post_id').eq('user_id',S.user.id).in('post_id',ids); S.liked=new Set((mine||[]).map(x=>x.post_id)); }
 }
