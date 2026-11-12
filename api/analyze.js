@@ -9,11 +9,11 @@ import { bumpUsage } from '../lib/usage.js';
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
 const CACHE_V = 2;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
-const MAX_IMAGES = 8;
+const MAX_IMAGES = 24;
 const MAX_IMAGE_B64 = 1_500_000;
 const DEADLINE_MS = 270_000;    // Vercel 300초 제한 전에 스스로 정리하고 안내
 
-function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo }) {
+function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanLog = null }) {
   const owner = comments.filter(c => c.owner), viewer = comments.filter(c => !c.owner);
   const fmt = list => list.map((c, i) => `(${i + 1})${c.likes ? ` [좋아요 ${c.likes}]` : ''} ${c.text}`).join('\n');
   return `너는 요리 초보를 위한 레시피 정리 전문가다. 인스타그램 릴스 자료를 보고, 그 안에 있는 레시피를 빠짐없이 찾아 그대로 따라 할 수 있게 JSON으로만 출력하라.
@@ -71,7 +71,7 @@ ${hasVideo ? `- cover_time: 완성된 음식(그릇·접시에 담긴 결과물)
 "beginner_notes":["최대 3개"]}]}
 
 자료: ${[caption ? '작성자 캡션' : null, owner.length ? `작성자 댓글 ${owner.length}개` : null, viewer.length ? `시청자 댓글 ${viewer.length}개` : null, hasVideo ? '릴스 영상(화면 + 음성)' : null, nImg ? `${fromVideo ? '영상에서 뽑은 장면' : '장면 스크린샷'} ${nImg}장` : null].filter(Boolean).join(', ')}
-${link ? `릴스 링크: ${link}\n` : ''}[작성자 캡션]
+${scanLog ? `[영상 장면 기록 — 영상을 처음부터 끝까지 직접 보고 들은 기록이다. 이것을 주된 근거로 레시피를 만든다. 장면 시각을 clip·photo·cover_time에 그대로 쓴다. amount_seen을 그 영상의 단위(숟갈, 컵 등)로 바꿔 orig_qty/orig_unit에 넣고, 화면만 보고 정한 양은 estimated: true]\n"""\n${JSON.stringify(scanLog).slice(0, 24000)}\n"""\n` : ''}${link ? `릴스 링크: ${link}\n` : ''}[작성자 캡션]
 """
 ${caption || '(없음)'}
 """
@@ -80,6 +80,27 @@ ${owner.length ? `"""\n${fmt(owner)}\n"""` : '(없음)'}
 [시청자 댓글 — 대부분 레시피가 아님, 규칙대로만 사용]
 ${viewer.length ? `"""\n${fmt(viewer)}\n"""` : '(없음)'}`;
 }
+
+// 영상만으로 레시피를 만들어야 할 때 1단계: 장면 기록 (보고 듣는 일만)
+function buildScanPrompt({ link }) {
+  return `너는 요리 영상을 꼼꼼히 기록하는 사람이다. 레시피를 바로 만들지 말고, 영상을 처음부터 끝까지 빠짐없이 보고 들은 것을 장면별로 기록해 JSON으로만 출력하라.
+
+[기록 규칙]
+- 동작이 바뀔 때마다 새 장면으로 나눈다(재료 손질, 넣기, 섞기, 굽기, 담기 등). 최대 40장면.
+- 장면마다 화면에 보이는 재료를 빠짐없이 적는다. 양은 보이는 그대로 묘사한다: "밥숟가락 수북이 2번", "종이컵 반", "계량컵 200ml 눈금까지", "포장지에 500g", "한 줌", "주먹만 한 양파 1개".
+- 화면 자막·글자·포장지 글씨는 보이는 그대로 옮겨 적는다(외국어면 원문 그대로, 뜻을 괄호로).
+- 음성 내레이션·대사에서 재료, 분량, 시간, 불 세기를 말하면 그대로 적는다. 음악뿐이면 "".
+- 불 세기는 불꽃 크기·지글거림·끓는 정도로 판단한다(약불/중불/강불/없음).
+- 걸린 시간을 알 수 있으면 적는다(자막 "3분", 화면 전환으로 짐작한 시간 등).
+- 요리를 만드는 영상이 아니면(먹방, 맛집 소개, 완성품만 보여줌) is_cooking을 false로.
+- 서로 다른 완성 요리가 여러 개면 dishes에 모두 적고, 장면마다 어느 요리인지 dish로 표시한다.
+
+출력 JSON:
+{"is_cooking":true,"reason":"","dishes":["요리 이름 추정"],"final_dish_time":"MM:SS",
+"scenes":[{"start":"00:03","end":"00:07","dish":"","action":"","ingredients":[{"name":"","amount_seen":"","from":"자막|음성|포장지|화면"}],"heat":"중불","onscreen_text":"","speech":""}]}
+${link ? `\n릴스 링크: ${link}` : ''}`;
+}
+const parseJ = t => { try { const a = t.indexOf('{'), b = t.lastIndexOf('}'); return JSON.parse(t.slice(a, b + 1)); } catch { return null; } };
 
 export function parseResult(text) {
   let j = null;
@@ -162,14 +183,43 @@ async function run(body, emit, t0) {
     for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
     return parts;
   };
-  const source = { v: CACHE_V, videoUrl: video && CDN_OK.test(videoUrl || '') ? videoUrl : null, duration, gotCaption: !!caption, gotComments: comments.length,
+  const source = { v: CACHE_V, mode: null, videoUrl: video && CDN_OK.test(videoUrl || '') ? videoUrl : null, duration, gotCaption: !!caption, gotComments: comments.length,
     ownerComments: comments.filter(c => c.owner).length, gotVideo: !!video, visualOnly: !strongText && visual, fps, caption: caption.slice(0, 3000), comments: showComments(comments), notes };
   emit({ stage: 'analyze', visualOnly: source.visualOnly, longVideo: dur > 90, gotVideo: !!video, videoMB: video ? +(video.bytes / 1048576).toFixed(1) : 0 });
 
   const left = () => DEADLINE_MS - (Date.now() - t0);
   // 결과 검사: 요리 영상인데 레시피가 비면 다음 설정(더 꼼꼼하게)으로 다시
   const validate = text => { const j = parseResult(text); return !!j && (j.recipes.length > 0 || j.is_food === false); };
-  const out = await generate({ key, cfgs, buildParts, validate, emit, left });
+
+  // 영상만으로 만들어야 하는 릴스(캡션·작성자 댓글에 분량이 하나도 없음) → 처음부터 2단계(장면 기록 → 레시피)
+  const textAny = qtyCount(caption) >= 1 || comments.some(c => c.owner && qtyCount(c.text) >= 1);
+  const visualFirst = !!video && !textAny;
+  // 2단계: ① 영상을 고화질로 장면별 기록 ② 기록(글)만 보고 레시피 정리
+  const twoStage = async () => {
+    emit({ stage: 'scan' });
+    const sfps = dur > 120 ? 0.33 : dur > 60 ? 0.5 : 1;
+    const scanCfgs = [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_HIGH' }, meta: true }, { gen: JSONC, meta: false }];
+    const scanParts = cfg => [{ text: buildScanPrompt({ link }) }, { inline_data: { mime_type: video.mime, data: video.b64 }, ...(cfg.meta && sfps !== 1 ? { video_metadata: { fps: sfps } } : {}) }];
+    const sc = await generate({ key, cfgs: scanCfgs, buildParts: scanParts, validate: t => { const j = parseJ(t); return !!j && ((Array.isArray(j.scenes) && j.scenes.length > 0) || j.is_cooking === false); }, emit, left });
+    if (!sc.ok) return sc;
+    const log = parseJ(sc.text);
+    if (!log) return { ok: false, reason: 'error', message: 'scan_parse' };
+    if (log.is_cooking === false) return { ok: true, model: sc.model, mode: 'two_stage', text: JSON.stringify({ is_food: false, reason: log.reason || '요리 과정이 나오지 않는 영상', recipes: [] }) };
+    emit({ stage: 'compose', scenes: (log.scenes || []).length });
+    const p2 = buildPrompt({ caption, comments, link, nImg: 0, fromVideo: false, hasVideo: true, scanLog: log });
+    const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left });
+    if (out2.ok) out2.mode = 'two_stage';
+    return out2;
+  };
+
+  let out;
+  if (visualFirst) out = await twoStage();
+  else {
+    out = await generate({ key, cfgs, buildParts, validate, emit, left });
+    // 한 번에 못 찾았으면(요리 아님 판정이 아닌데 레시피가 빔) 영상이 있으면 2단계로 한 번 더
+    const r1 = out.ok ? parseResult(out.text) : null;
+    if (video && out.ok && r1 && !r1.recipes.length && r1.is_food !== false && left() > 90000) { notes.push('fallback_two_stage'); out = await twoStage(); }
+  }
 
   if (!out.ok) {
     if (out.reason === 'too_long') return { status: 504, json: { error: 'too_long', notes } };
@@ -180,7 +230,8 @@ async function run(body, emit, t0) {
   }
   const result = parseResult(out.text);
   if (!result) return { status: 502, json: { error: 'empty_answer', finish: out.finish, notes } };
-  if (!result.recipes.length) return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, noRecipe: true } };
+  source.mode = out.mode || 'single';
+  if (!result.recipes.length) return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, noRecipe: true, notes } };
   if (code && !images.length) {
     const { notes: _n, ...src } = source;
     await cachePut(code, { recipe: result, source: src, video_url: source.videoUrl, model: out.model });

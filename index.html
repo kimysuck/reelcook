@@ -486,7 +486,7 @@ html.nosplash #splash{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.4.1';
+const VERSION='v1.5';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -676,13 +676,14 @@ async function shrink(blob, max=1024, q=0.82){
     return await new Promise(r=>c.toBlob(r,'image/jpeg',q));
   } finally { URL.revokeObjectURL(url); }
 }
-async function videoFrames(blob, n=8, max=768){
+async function videoFrames(blob, n=8, max=768, auto=false){
   const url=URL.createObjectURL(blob), v=document.createElement('video');
   v.muted=true; v.playsInline=true; v.preload='auto'; v.src=url;
   const wait=(ev,ms=8000)=>new Promise((res,rej)=>{ const t=setTimeout(()=>rej(new Error('timeout '+ev)),ms); v.addEventListener(ev,()=>{clearTimeout(t);res();},{once:true}); });
   try{
     await wait('loadeddata',15000);
     const d=isFinite(v.duration)&&v.duration>0?v.duration:30;
+    if (auto) n=Math.max(10, Math.min(20, Math.round(d/2)));
     const s=Math.min(1, max/Math.max(v.videoWidth||max, v.videoHeight||max));
     const c=document.createElement('canvas'); c.width=Math.round((v.videoWidth||max)*s); c.height=Math.round((v.videoHeight||max)*s);
     const ctx=c.getContext('2d'), out=[];
@@ -695,7 +696,7 @@ function blobToB64(blob){ return new Promise((res,rej)=>{ const r=new FileReader
 async function addImages(blobs){ for (const b of blobs){ if (S.images.length>=8) break; try{ const s=await shrink(b); S.images.push({blob:s,url:URL.createObjectURL(s)}); }catch(e){} } }
 async function addVideo(blob, name){
   try{
-    const {frames, times}=await videoFrames(blob, 8);
+    const {frames, times}=await videoFrames(blob, 8, 640, true);
     S.images.forEach(x=>URL.revokeObjectURL(x.url)); S.images=[]; S.videoBlob=blob; S.frameTimes=times;
     for (const f of frames) S.images.push({blob:f,url:URL.createObjectURL(f)});
     S.fromVideo=true; S.videoName=name||'공유받은 영상';
@@ -761,6 +762,7 @@ const ERR = {
   bad_image:'사진 형식이나 크기를 처리하지 못했어요.',
   empty_answer:'AI가 답을 비워서 보냈어요. 한 번만 다시 시도해 주세요.',
 };
+const src0=d=>d&&d.source&&d.source.mode?('mode:'+d.source.mode):'';
 const kst=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } };
 let tick=null;
 // 스트리밍 요청: 서버가 진행 상황과 5초마다 신호를 보내 연결이 끊기지 않게 한다
@@ -783,7 +785,7 @@ async function streamAnalyze(body, onEvent){
 async function analyze(opts={}){
   const igLink=/instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
-  S.busy=true; S.error=''; S.canRetry=false; S.shareNote=''; S.t0=S.t0&&S.phase==='frames'?S.t0:Date.now(); S.fetched=null; S.note2='';
+  S.busy=true; S.error=''; S.errCode=''; S.canRetry=false; S.shareNote=''; S.t0=S.t0&&S.phase==='frames'?S.t0:Date.now(); S.fetched=null; S.note2='';
   S.phase = igLink && !S.images.length ? 'fetch' : 'analyze'; render();
   clearInterval(tick); tick=setInterval(()=>{ const el=$('#elapsed'); if(el) el.textContent=`${Math.round((Date.now()-S.t0)/1000)}초`; },1000);
   try{
@@ -798,16 +800,20 @@ async function analyze(opts={}){
       else if (ev.stage==='busy'){ S.note2='AI 모델이 잠시 붐벼서 한 번 더 시도하는 중…'; render(); }
       else if (ev.stage==='switch'){ S.note2={busy:'이 AI 모델이 붐벼서 다른 모델로 바꿔 분석하는 중…', quota:'이 모델의 분당 무료 사용량이 차서 다른 모델로 바꾸는 중…', day:'이 모델의 오늘 무료 한도가 끝나서 다른 모델로 바꾸는 중…'}[ev.why]||'다른 AI 모델로 바꾸는 중…'; render(); }
       else if (ev.stage==='wait'){ S.note2=`무료 사용량 속도 제한 때문에 ${ev.sec}초 기다렸다가 이어서 분석해요…`; render(); }
+      else if (ev.stage==='scan'){ S.phase='scan'; S.note2=''; render(); }
+      else if (ev.stage==='compose'){ S.phase='compose'; S.scenes=ev.scenes; S.note2=''; render(); }
       else if (ev.stage==='retry'){ S.note2='레시피를 확실히 찾지 못해서 영상 자막과 음성까지 더 꼼꼼하게 다시 보는 중…'; render(); }
     });
+    S.errCode = data.error ? [data.error, ...(data.notes||[])].filter(Boolean).join(' · ').slice(0,200) : '';
     if (data.error || (data.status && data.status!==200)){
-      if (data.error==='need_input'){ S.shareNote='link'; throw new Error('이 릴스의 캡션과 영상을 가져오지 못했어요. 비공개 계정이거나 일시적인 문제일 수 있어요.'); }
+      if (data.error==='need_input'){ S.shareNote='link'; throw new Error('서버가 이 릴스의 영상을 받지 못했어요. 비공개 계정이거나 인스타가 잠시 막은 경우예요. 아래 방법처럼 영상을 저장해서 공유하면 분석할 수 있어요.'); }
       if (data.error==='too_long'){ S.canRetry=true; throw new Error('영상이 길어서 시간 안에 분석을 끝내지 못했어요. 다시 시도하거나, 캡션을 붙여넣어 주세요.'); }
       if (data.error==='busy'||data.error==='rate_limited') S.canRetry=true;
       if (data.error==='quota_day') throw new Error(`${ERR.quota_day} ${data.resetAt?kst(data.resetAt)+'에 다시 채워져요.':''} 설정 > AI 사용량에서 확인할 수 있어요.`);
       throw new Error(ERR[data.error] || `분석 서버 오류 (${data.error||data.status}${data.message?': '+data.message:''})`);
     }
     const res=parseJSON(data.text), list=(Array.isArray(res.recipes)?res.recipes:[res]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
+    if (!list.length){ S.errCode=['no_recipe', src0(data), ...(data.notes||[])].filter(Boolean).join(' · '); }
     if (!list.length) throw new Error(res.is_food===false ? `요리를 만드는 릴스가 아닌 것 같아요${res.reason?` (${res.reason})`:''}. 요리 과정이 나오는 릴스를 공유해 주세요.` : '이 릴스에서 레시피를 찾지 못했어요. 캡션을 직접 붙여넣거나 다른 릴스로 시도해 주세요.');
     const src=data.source||{}, ev=res.evidence||{};
     const base={cached:!!src.cached, link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
@@ -853,9 +859,13 @@ function viewProgress(){
     : S.phase==='cached' ? '이미 정리된 릴스예요. 바로 불러올게요'
     : S.phase==='fetch' ? '릴스를 가져오는 중'
     : S.phase==='download' ? '영상을 받는 중'
+    : S.phase==='scan' ? '글 설명이 없어서 영상을 장면별로 기록하는 중'
+    : S.phase==='compose' ? `장면 ${S.scenes||''}개를 보고 레시피로 정리하는 중`
     : f && f.visualOnly ? '영상 속 자막과 음성까지 꼼꼼히 읽는 중'
     : f && f.gotVideo ? '영상과 캡션을 같이 읽는 중' : '레시피로 정리하는 중';
   const hint = S.phase==='fetch' ? '보통 10~30초 걸려요'
+    : S.phase==='scan' ? '화면과 소리만으로 만들어서 1~2분 걸릴 수 있어요'
+    : S.phase==='compose' ? '거의 다 됐어요'
     : f && f.longVideo ? '긴 영상이라 1~2분 걸릴 수 있어요'
     : f && f.visualOnly ? '정확도를 위해 30~60초 걸려요' : '보통 15~40초 걸려요';
   let checks='';
@@ -884,7 +894,7 @@ function viewImport(){
   <h2>릴스 링크 하나면<br>레시피가 돼요</h2>
   <p class="lead">인스타에서 공유하기를 누르고 릴쿡을 고르세요. 캡션과 영상을 읽어서 계량까지 맞춰 드려요.</p>
   <button class="btn pri" id="pasteGo" style="margin-top:20px;min-height:58px">${IC.link}복사한 링크로 시작</button>
-  ${S.error?`<div class="err">${esc(S.error)}${S.canRetry&&(S.link||S.caption||S.images.length)?`<div style="margin-top:8px"><button class="btn link" id="retry">다시 시도</button></div>`:''}</div>`:''}
+  ${S.error?`<div class="err">${esc(S.error)}${S.errCode?`<div style="font-size:.74rem;opacity:.75;margin-top:6px">원인 코드: ${esc(S.errCode)} (문의할 때 알려 주세요)</div>`:''}${S.canRetry&&(S.link||S.caption||S.images.length)?`<div style="margin-top:8px"><button class="btn link" id="retry">다시 시도</button></div>`:''}</div>`:''}
   ${note?`<div class="banner">${note}</div>`:''}
   <details class="sect" ${S.shareNote==='link'||S.caption||S.images.length?'open':''}><summary>직접 넣기${IC.down}</summary>
     <p class="muted">캡션 글, 장면 사진, 저장한 영상 파일로도 만들 수 있어요.</p>
