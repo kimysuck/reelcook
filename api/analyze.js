@@ -3,7 +3,7 @@
 
 import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK, qtyCount } from '../lib/instagram.js';
 import { cacheGet, cachePut, cachePatch } from '../lib/db.js';
-import { generate } from '../lib/gemini.js';
+import { generate, uploadVideo, deleteVideo, videoPart, FILE_URI } from '../lib/gemini.js';
 import { bumpUsage } from '../lib/usage.js';
 import { verifyUser } from '../lib/auth.js';
 import { DAILY_LIMIT, kstMidnight, isTester, whoOf, usedToday, addUse, logFailure, cleanupMaybe } from '../lib/quota.js';
@@ -13,7 +13,8 @@ export const config = { maxDuration: 300 };
 const CACHE_V = 2;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
 const MAX_IMAGES = 24;
 const MAX_IMAGE_B64 = 1_500_000;
-const DEADLINE_MS = 270_000;    // Vercel 300초 제한 전에 스스로 정리하고 안내
+const DEADLINE_MS = () => +process.env.ANALYZE_DEADLINE_MS || 270_000;   // Vercel 300초 제한 전에 스스로 정리 (테스트에서만 바꿈)
+const MAX_HOPS = 3;   // 시간이 모자라면 "이어서 분석"을 최대 3번까지(한 번에 약 4분 30초씩)
 
 function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanLog = null }) {
   const owner = comments.filter(c => c.owner), viewer = comments.filter(c => !c.owner);
@@ -124,10 +125,15 @@ const showComments = list => list.map(c => (c.owner ? '작성자: ' : '') + c.te
 async function run(body, emit, t0, req) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { status: 500, json: { error: 'no_key' } };
-  let caption = String(body.caption || '').slice(0, 8000);
-  let comments = normComments(body.comments);
-  let videoUrl = body.videoUrl ? String(body.videoUrl) : null;
-  let duration = Number(body.duration) || null;
+  // 이어서 분석: 앞 요청이 시간이 모자라 넘겨준 상태(가져온 캡션·댓글, Google에 올린 영상, 장면 기록)
+  const hop = Math.max(0, Math.min(9, Math.floor(+body.hop || 0)));
+  const R = body.resume && typeof body.resume === 'object' && !Array.isArray(body.images) ? body.resume : null;
+  let caption = String((R ? R.caption : body.caption) || '').slice(0, 8000);
+  let comments = normComments(R ? R.comments : body.comments);
+  let videoUrl = (R ? R.videoUrl : body.videoUrl) ? String(R ? R.videoUrl : body.videoUrl) : null;
+  let duration = Number(R ? R.duration : body.duration) || null;
+  let scanSaved = R && R.scanLog && typeof R.scanLog === 'object' && JSON.stringify(R.scanLog).length < 60000 ? R.scanLog : null;
+  const lite = !!R;   // 이어서 분석할 때는 더 가벼운 설정으로 시간 안에 끝낸다
   const link = String(body.link || '').slice(0, 500);
   const fromVideo = !!body.fromVideo;
   const images = Array.isArray(body.images) ? body.images.slice(0, MAX_IMAGES) : [];
@@ -137,6 +143,7 @@ async function run(body, emit, t0, req) {
     }
   }
   const notes = [];
+  if (R && Array.isArray(R.notes)) notes.push(...R.notes.slice(-8).map(x => String(x).slice(0, 80)), `hop${hop}`);
   const code = shortcodeOf(link);
 
   // "결과가 이상해요": 누가 했는지는 남기지 않고 릴스 코드와 이유만 실패 기록에 남긴 뒤, 캐시를 건너뛰고 새로 분석한다
@@ -147,7 +154,7 @@ async function run(body, emit, t0, req) {
   }
 
   // ⚡ 캐시: 같은 방식(CACHE_V)으로 분석한 결과만 바로 돌려준다
-  if (code && !images.length && !body.noCache) {
+  if (code && !images.length && !body.noCache && !R) {
     const hit = await cacheGet(code);
     if (hit && hit.recipe && hit.source && hit.source.v === CACHE_V) {
       emit({ stage: 'cached' });
@@ -166,9 +173,10 @@ async function run(body, emit, t0, req) {
   cleanupMaybe();
   const countUse = async () => { if (!who || tester) return null; const n = await addUse(who); return n == null ? null : Math.max(0, DAILY_LIMIT - n); };
 
-  if (code && !body.fetched && !images.length) {
-    emit({ stage: 'fetch' });
+  if (code && !body.fetched && !images.length && !R) {
+    emit({ stage: 'fetch' }); const tf = Date.now();
     const m = await getReelMeta(link).catch(() => null);
+    notes.push(`t_fetch:${Math.round((Date.now() - tf) / 1000)}s`);
     if (m) {
       caption = [caption, m.caption].filter(Boolean).join('\n\n'); if (!comments.length) comments = normComments(m.comments);
       videoUrl = videoUrl || m.videoUrl; duration = duration || m.duration; notes.push(...m.notes);
@@ -177,7 +185,18 @@ async function run(body, emit, t0, req) {
   }
 
   let video = null;
-  if (videoUrl && !images.length) { emit({ stage: 'download' }); video = await downloadVideo(videoUrl, notes); }
+  const rf = R && R.file && FILE_URI.test(String(R.file.uri || '')) ? R.file : null;
+  if (rf) video = { uri: rf.uri, name: String(rf.name || ''), mime: /^video\/[a-z0-9.+-]+$/i.test(rf.mime || '') ? rf.mime : 'video/mp4', bytes: +rf.bytes || 0 };
+  else if (videoUrl && !images.length) {
+    emit({ stage: 'download' }); let td = Date.now();
+    const raw = await downloadVideo(videoUrl, notes);
+    if (raw) {
+      notes.push(`t_dl:${Math.round((Date.now() - td) / 1000)}s:${(raw.bytes / 1048576).toFixed(1)}MB`); td = Date.now();
+      const up = await uploadVideo(key, raw.buf, raw.mime, () => DEADLINE_MS() - (Date.now() - t0));
+      notes.push(up.uri ? `t_up:${Math.round((Date.now() - td) / 1000)}s` : up.err);
+      video = up.uri ? { ...up, bytes: raw.bytes } : { b64: raw.buf.toString('base64'), mime: raw.mime, bytes: raw.bytes };   // 못 올리면 예전처럼 요청에 직접 넣기
+    }
+  }
   if (!caption.trim() && !comments.length && !images.length && !video) return { status: 422, json: { error: 'need_input', notes } };
 
   // 글에 분량이 충분히 적혀 있으면 빠르게, 아니면 영상 자막까지 읽을 수 있게 고화질(프레임당 280토큰)로 꼼꼼하게
@@ -185,9 +204,12 @@ async function run(body, emit, t0, req) {
   const visual = !!(video || images.length);
   const dur = duration || (video ? video.bytes / (350 * 1024) : 0);   // 길이를 모르면 용량으로 짐작
   // 토큰 절약: 영상 토큰 = 장면 수 × (고화질 280 / 저화질 70). 자막은 보통 2초 이상 떠 있어서 2초에 1장이면 읽힌다.
-  const fps = !video ? null : strongText ? (dur > 60 ? 0.25 : 0.5) : dur > 180 ? 0.25 : dur > 90 ? 0.33 : dur > 30 ? 0.5 : 1;
+  const fps0 = !video ? null : strongText ? (dur > 60 ? 0.25 : 0.5) : dur > 180 ? 0.25 : dur > 90 ? 0.33 : dur > 30 ? 0.5 : 1;
+  const fps = fps0 && lite ? Math.max(0.25, fps0 / 2) : fps0;
   const JSONC = { responseMimeType: 'application/json' };
-  const cfgs = strongText
+  const cfgs = lite
+    ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, ...(visual ? { mediaResolution: 'MEDIA_RESOLUTION_MEDIUM' } : {}) }, meta: true }, { gen: JSONC, meta: false }]
+    : strongText
     ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' }, meta: true },
        ...(visual ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'medium' }, mediaResolution: 'MEDIA_RESOLUTION_HIGH' }, meta: true }] : []),
        { gen: JSONC, meta: false }]
@@ -197,7 +219,7 @@ async function run(body, emit, t0, req) {
   const prompt = buildPrompt({ caption, comments, link, nImg: images.length, fromVideo, hasVideo: !!video });
   const buildParts = cfg => {
     const parts = [{ text: prompt }];
-    if (video) parts.push({ inline_data: { mime_type: video.mime, data: video.b64 }, ...(cfg.meta && fps && fps !== 1 ? { video_metadata: { fps } } : {}) });
+    if (video) parts.push(videoPart(video, cfg.meta && fps && fps !== 1 ? { fps } : null));
     for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
     return parts;
   };
@@ -205,7 +227,8 @@ async function run(body, emit, t0, req) {
     ownerComments: comments.filter(c => c.owner).length, gotVideo: !!video, visualOnly: !strongText && visual, fps, caption: caption.slice(0, 3000), comments: showComments(comments), notes };
   emit({ stage: 'analyze', visualOnly: source.visualOnly, longVideo: dur > 90, gotVideo: !!video, videoMB: video ? +(video.bytes / 1048576).toFixed(1) : 0 });
 
-  const left = () => DEADLINE_MS - (Date.now() - t0);
+  const left = () => DEADLINE_MS() - (Date.now() - t0);
+  const log = notes;
   // 결과 검사: 요리 영상인데 레시피가 비면 다음 설정(더 꼼꼼하게)으로 다시
   const validate = text => { const j = parseResult(text); return !!j && (j.recipes.length > 0 || j.is_food === false); };
 
@@ -214,38 +237,51 @@ async function run(body, emit, t0, req) {
   const visualFirst = !!video && !textAny;
   // 2단계: ① 영상을 고화질로 장면별 기록 ② 기록(글)만 보고 레시피 정리
   const twoStage = async () => {
-    emit({ stage: 'scan' });
-    const sfps = dur > 120 ? 0.33 : dur > 60 ? 0.5 : 1;
-    const scanCfgs = [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_HIGH' }, meta: true }, { gen: JSONC, meta: false }];
-    const scanParts = cfg => [{ text: buildScanPrompt({ link }) }, { inline_data: { mime_type: video.mime, data: video.b64 }, ...(cfg.meta && sfps !== 1 ? { video_metadata: { fps: sfps } } : {}) }];
-    const sc = await generate({ key, cfgs: scanCfgs, buildParts: scanParts, validate: t => { const j = parseJ(t); return !!j && ((Array.isArray(j.scenes) && j.scenes.length > 0) || j.is_cooking === false); }, emit, left });
-    if (!sc.ok) return sc;
-    const log = parseJ(sc.text);
-    if (!log) return { ok: false, reason: 'error', message: 'scan_parse' };
+    let log = scanSaved, sc = { model: 'saved' };
+    if (!log) {
+      emit({ stage: 'scan' });
+      const sfps0 = dur > 120 ? 0.33 : dur > 60 ? 0.5 : 1, sfps = lite ? Math.max(0.25, sfps0 / 2) : sfps0;
+      const scanCfgs = [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: lite ? 'MEDIA_RESOLUTION_MEDIUM' : 'MEDIA_RESOLUTION_HIGH' }, meta: true }, { gen: JSONC, meta: false }];
+      const scanParts = cfg => [{ text: buildScanPrompt({ link }) }, videoPart(video, cfg.meta && sfps !== 1 ? { fps: sfps } : null)];
+      sc = await generate({ key, cfgs: scanCfgs, buildParts: scanParts, validate: t => { const j = parseJ(t); return !!j && ((Array.isArray(j.scenes) && j.scenes.length > 0) || j.is_cooking === false); }, emit, left, log: notes });
+      if (!sc.ok) return sc;
+      log = parseJ(sc.text);
+      if (!log) return { ok: false, reason: 'error', message: 'scan_parse' };
+      scanSaved = log;   // 이 뒤에 시간이 모자라면 장면 기록을 넘겨서 이어서 분석
+    }
     if (log.is_cooking === false) return { ok: true, model: sc.model, mode: 'two_stage', text: JSON.stringify({ is_food: false, reason: log.reason || '요리 과정이 나오지 않는 영상', recipes: [] }) };
     emit({ stage: 'compose', scenes: (log.scenes || []).length });
     const p2 = buildPrompt({ caption, comments, link, nImg: 0, fromVideo: false, hasVideo: true, scanLog: log });
-    const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left });
+    const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: lite ? 'low' : 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left, log: notes });
     if (out2.ok) out2.mode = 'two_stage';
     return out2;
   };
 
   let out;
-  if (visualFirst) out = await twoStage();
+  if (visualFirst || scanSaved) out = await twoStage();
   else {
-    out = await generate({ key, cfgs, buildParts, validate, emit, left });
+    out = await generate({ key, cfgs, buildParts, validate, emit, left, log: notes });
     // 한 번에 못 찾았으면(요리 아님 판정이 아닌데 레시피가 빔) 영상이 있으면 2단계로 한 번 더
     const r1 = out.ok ? parseResult(out.text) : null;
     if (video && out.ok && r1 && !r1.recipes.length && r1.is_food !== false && left() > 90000) { notes.push('fallback_two_stage'); out = await twoStage(); }
   }
 
+  const done = () => { if (video && video.name) return deleteVideo(key, video.name); };   // 다 끝나면 Google에 올린 영상을 지운다
   if (!out.ok) {
+    if (out.reason === 'too_long' && hop + 1 < MAX_HOPS && !images.length) {
+      // 실패 대신 "이어서 분석": 지금까지 한 일을 앱에 넘기고, 앱이 바로 다음 요청을 보낸다
+      emit({ stage: 'continue', hop: hop + 1 });
+      return { status: 200, json: { continue: true, hop: hop + 1, notes, resume: { caption, comments, duration, videoUrl,
+        file: video && video.uri ? { uri: video.uri, name: video.name, mime: video.mime, bytes: video.bytes } : null, scanLog: scanSaved || null, notes: notes.slice(-8) } } };
+    }
+    await done();
     if (out.reason === 'too_long') return { status: 504, json: { error: 'too_long', notes } };
     if (out.reason === 'quota_day') return { status: 429, json: { error: 'quota_day', resetAt: out.resetAt } };
     if (out.reason === 'quota') return { status: 429, json: { error: 'rate_limited', resetAt: out.resetAt } };
     if (out.reason === 'busy') return { status: 503, json: { error: 'busy' } };
     return { status: 502, json: { error: 'gemini', status: out.status, message: out.message || '', notes } };
   }
+  await done();
   const result = parseResult(out.text);
   if (!result) return { status: 502, json: { error: 'empty_answer', finish: out.finish, notes } };
   source.mode = out.mode || 'single';
