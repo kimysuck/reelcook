@@ -5,7 +5,8 @@ API 키 없이 돌아가고, 무료 AI 사용량도 쓰지 않아요.
 
 ## 실행
 ```bash
-pip install playwright && playwright install chromium   # 처음 한 번
+pip install playwright        # 처음 한 번
+playwright install chromium   # 크롬이 없는 컴퓨터에서만 (Claude Code 클라우드 환경은 크롬이 이미 있어서 생략)
 bash tests/run_all.sh
 ```
 

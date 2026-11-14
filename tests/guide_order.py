@@ -1,11 +1,11 @@
 from playwright.sync_api import sync_playwright
-from common import TV
+from common import TV, L
 import urllib.request
 B='http://localhost:8788'
 urllib.request.urlopen(B+'/__set?mode=caption&script=jumble').read()
 FAKE=open('fake-supabase2.js').read()
 with sync_playwright() as p:
-    b=p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required']); ctx=b.new_context(viewport={'width':390,'height':844})
+    b=p.chromium.launch(**L(), args=['--autoplay-policy=no-user-gesture-required']); ctx=b.new_context(viewport={'width':390,'height':844})
     ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'x'}));localStorage.setItem('rc_pass',JSON.stringify('1234'));localStorage.setItem('rc_splash_at',String(Date.now()))")
     ctx.route('**/supabase-js@2/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=FAKE))
     pg=ctx.new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
