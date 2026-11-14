@@ -389,6 +389,7 @@ html.nosplash #splash{display:none}
 .usage th:first-child,.usage td:first-child{text-align:left}
 .usage th{font-size:.76rem;color:var(--sub);font-weight:700}
 .usage tr.ex td{color:var(--hot)}
+.fails>div{padding:9px 0;border-bottom:1px solid var(--line2);font-size:.86rem}
 
 /* 표지 고르기 */
 .hbtn{position:absolute;right:14px;bottom:12px;display:inline-flex;align-items:center;gap:6px;background:rgba(43,30,24,.72);color:#fff;font-size:.82rem;font-weight:700;padding:7px 12px;border-radius:18px}
@@ -486,7 +487,7 @@ html.nosplash #splash{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.5';
+const VERSION='v1.6';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -767,7 +768,9 @@ const kst=iso=>{ try{ return new Date(iso).toLocaleString('ko-KR',{timeZone:'Asi
 let tick=null;
 // 스트리밍 요청: 서버가 진행 상황과 5초마다 신호를 보내 연결이 끊기지 않게 한다
 async function streamAnalyze(body, onEvent){
-  const r=await fetch('/api/analyze',{ method:'POST', headers:{'Content-Type':'application/json', ...(S.pass?{'x-app-passcode':S.pass}:{})}, body:JSON.stringify({...body, stream:true}) });
+  // 로그인했으면 계정 기준으로 하루 횟수를 센다(테스터 확인도 이걸로)
+  let tok=null; try{ if (sb && S.user){ const {data}=await sb.auth.getSession(); tok=data.session&&data.session.access_token; } }catch(e){}
+  const r=await fetch('/api/analyze',{ method:'POST', headers:{'Content-Type':'application/json', ...(S.pass?{'x-app-passcode':S.pass}:{}), ...(tok?{Authorization:'Bearer '+tok}:{})}, body:JSON.stringify({...body, stream:true}) });
   if (!r.ok || !r.body || !(r.headers.get('content-type')||'').includes('ndjson')){
     const data=await r.json().catch(()=>({})); return { status:r.status, ...data };
   }
@@ -808,6 +811,7 @@ async function analyze(opts={}){
     if (data.error || (data.status && data.status!==200)){
       if (data.error==='need_input'){ S.shareNote='link'; throw new Error('서버가 이 릴스의 영상을 받지 못했어요. 비공개 계정이거나 인스타가 잠시 막은 경우예요. 아래 방법처럼 영상을 저장해서 공유하면 분석할 수 있어요.'); }
       if (data.error==='too_long'){ S.canRetry=true; throw new Error('영상이 길어서 시간 안에 분석을 끝내지 못했어요. 다시 시도하거나, 캡션을 붙여넣어 주세요.'); }
+      if (data.error==='daily_limit') throw new Error(`오늘 분석 ${data.limit||10}회를 모두 썼어요. ${data.resetAt?kst(data.resetAt):'내일 0시'}에 다시 채워져요. 이미 분석된 릴스는 횟수와 상관없이 바로 볼 수 있어요.`);
       if (data.error==='busy'||data.error==='rate_limited') S.canRetry=true;
       if (data.error==='quota_day') throw new Error(`${ERR.quota_day} ${data.resetAt?kst(data.resetAt)+'에 다시 채워져요.':''} 설정 > AI 사용량에서 확인할 수 있어요.`);
       throw new Error(ERR[data.error] || `분석 서버 오류 (${data.error||data.status}${data.message?': '+data.message:''})`);
@@ -829,6 +833,7 @@ async function analyze(opts={}){
     openRecipe(set[0], null, set);
     prepareMedia(set[0], S.setMedia(set[0]));
     if (set.length>1) toast(`이 릴스에서 레시피 ${set.length}개를 찾았어요`);
+    else if (data.left!=null && data.left<=5) toast(`오늘 남은 분석 ${data.left}회`);
   }catch(e){
     const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
     if (net){ S.canRetry=true; S.error='인터넷 연결이 중간에 끊겼어요. 와이파이·데이터 상태를 확인하고 다시 시도해 주세요.'; }
@@ -1582,8 +1587,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-12';
-const TERMS_CHANGES='레시피를 찾는 방식(화면 자막·음성·댓글 판별, 여러 레시피 정리)과 AI 사용량 기록 내용을 더했어요.';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-14';
+const TERMS_CHANGES='무료 서비스를 안정적으로 운영하기 위해 하루 분석 횟수(10회) 제한과 그에 필요한 기록 항목을 더했어요.';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -1615,7 +1620,8 @@ function showGate(){
       ${item('privacy','개인정보 수집·이용','privacy',`<table class="sumtbl"><tr><th>항목</th><th>목적</th><th>보관</th></tr>
         <tr><td>구글 계정 이메일·이름, 닉네임, 프로필 사진</td><td>로그인, 피드 작성자 표시</td><td>탈퇴할 때까지</td></tr>
         <tr><td>게시물, 저장한 레시피</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
-        <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr></table>
+        <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr>
+        <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr></table>
         <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
     </div>
     <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
@@ -1670,7 +1676,10 @@ async function showUsage(){
       <p class="muted" style="font-size:.8rem;margin-top:12px">무료 한도는 모델마다 따로 있어서, 한 모델이 붐비거나 한도가 차면 아래 모델로 자동으로 넘어가요. 하루 한도는 ${kst(d.resetAt)}에 다시 채워져요.</p>
       <p class="muted" style="font-size:.8rem;margin-top:6px">Google은 정확한 무료 한도 숫자를 API로 알려주지 않아요. 모델별 한도와 남은 양은 AI Studio에서 볼 수 있어요.</p>
       ${d.tracking&&!(d.rows||[]).length?'<div class="note" style="margin-top:10px">아직 기록이 없어요. Supabase에서 update-v1.3.sql을 실행했는지 확인해 주세요.</div>':''}
-      <a class="btn ghost" style="width:100%;margin-top:14px;text-decoration:none" href="${esc(d.studio)}" target="_blank" rel="noopener">AI Studio에서 한도 보기</a>`;
+      <a class="btn ghost" style="width:100%;margin-top:14px;text-decoration:none" href="${esc(d.studio)}" target="_blank" rel="noopener">AI Studio에서 한도 보기</a>
+      <p class="muted" style="font-size:.8rem;margin-top:14px">한 사람당 하루 분석 ${d.dailyLimit||10}회(한국 시간 0시에 다시 채워짐). 테스터 계정은 제한이 없어요.</p>
+      <label class="fl">최근 실패 ${(d.failures||[]).length}건</label>
+      ${(d.failures||[]).length?`<div class="fails">${d.failures.map(f=>`<div><b>${esc(f.error)}</b> <span class="muted">${esc(new Date(f.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}${f.sec?`, ${f.sec}초`:''}</span><div class="muted" style="font-size:.74rem;word-break:break-all">${esc([f.reel_code, f.mode, ...(f.notes||[])].filter(Boolean).join(' · '))}</div></div>`).join('')}</div>`:'<p class="muted" style="font-size:.84rem">최근 실패가 없어요.</p>'}`;
   }catch(e){ ub.textContent=e.message||'불러오지 못했어요.'; }
 }
 

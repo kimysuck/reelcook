@@ -1,0 +1,102 @@
+import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const HERE=path.dirname(fileURLToPath(import.meta.url)); const ROOT=path.resolve(HERE,'..');
+process.env.GEMINI_API_KEY='k'; process.env.APP_PASSCODE='1234'; process.env.APIFY_TOKEN='tok'; process.env.SUPABASE_URL='https://fake.supabase.co'; process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_x'; process.env.SUPABASE_SECRET_KEY='sb_secret_x'; process.env.TESTER_EMAILS=process.env.TESTER_EMAILS||'tester@example.com';
+const CACHE=new Map(); const DB={profiles:[],recipes:[],posts:[],likes:[]}; const PHOTOS=new Map();
+const MOCK={title:"대패삼겹 숙주볶음",emoji:"🥓",summary:"10분 자취 요리",servings:2,difficulty:"쉬움",total_min:10,confidence:"high",assumptions:[],
+ingredients:[{name:"대패삼겹살",group:"주재료",original:"200g",orig_qty:200,orig_unit:"g",grams:200,primary:"g",buy:true,brand:"",buy_keyword:"대패삼겹살"},
+{name:"숙주",group:"주재료",original:"한봉지",orig_qty:1,orig_unit:"봉",grams:300,primary:"g",buy:true},
+{name:"간장",group:"양념",original:"간장 2숟갈",orig_qty:2,orig_unit:"숟갈",grams:24,ml:20,primary:"ml",buy:false},
+{name:"굴소스",group:"양념",original:"1숟갈",orig_qty:1,orig_unit:"숟갈",grams:18,ml:15,primary:"ml",buy:true,brand:"이금기 굴소스",buy_keyword:"이금기 굴소스"},
+{name:"설탕",group:"양념",original:"반숟갈",orig_qty:0.5,orig_unit:"숟갈",grams:6,primary:"g",buy:false},
+{name:"후추",group:"양념",original:"톡톡",orig_qty:null,orig_unit:"약간",grams:0.3,primary:"g",buy:false}],
+steps:[{text:"팬에 [[0]]을 올려 바싹 굽는다",heat:"중불",seconds:180,cue:"가장자리가 갈색이 되면",tip:"기름은 안 둘러도 돼요",mistake:"",clip:{start:"00:02",end:"00:06"},photo:"00:05"},{text:"[[2]], [[3]], [[4]]를 붓고 [[1]]을 넣어 30초 볶는다",heat:"강불",seconds:30,cue:"",tip:"",mistake:"오래 볶으면 숙주에서 물이 나와요",clip:{start:"00:12",end:"00:16"},photo:"00:15"}],
+tools:[],nutrition_per_serving:{kcal:520,carb_g:12,protein_g:22,fat_g:42,sugar_g:5,sodium_mg:1300},beginner_notes:["재료를 먼저 다 손질해 두세요"]};
+const st={mode:'caption', gem:[], firstEmpty:false, script:[], usage:{}, quota:{}, quotaFill:0, fails:[]};
+globalThis.fetch=async (url,opts)=>{ url=String(url);
+  if(url.includes('/rest/v1/rpc/bump_analysis_quota')){ const b=JSON.parse(opts.body); st.quota[b.p_who]=(st.quota[b.p_who]??st.quotaFill)+1; return {ok:true,status:200,json:async()=>st.quota[b.p_who]}; }
+  if(url.includes('/rest/v1/analysis_quota')){ if((opts&&opts.method)==='DELETE') return {ok:true,status:204,json:async()=>null}; const who=decodeURIComponent((url.match(/who=eq\.([^&]+)/)||[])[1]||''); const n=st.quota[who]??st.quotaFill; st.lastWho=who; return {ok:true,status:200,json:async()=>n?[{n}]:[]}; }
+  if(url.includes('/rest/v1/analysis_failures')){ const m=(opts&&opts.method)||'GET'; if(m==='POST'){ st.fails.unshift({at:new Date().toISOString(),...JSON.parse(opts.body)}); return {ok:true,status:201,json:async()=>null}; } if(m==='DELETE') return {ok:true,status:204,json:async()=>null}; return {ok:true,status:200,json:async()=>st.fails.slice(0,10)}; }
+  if(url.includes('/rest/v1/rpc/bump_ai_usage')){ const b=JSON.parse(opts.body); const r=st.usage[b.p_model]||(st.usage[b.p_model]={model:b.p_model,day:b.p_day,calls:0,ok:0,busy:0,limited:0,tokens_in:0,tokens_out:0,day_exhausted:false}); r.calls++; r.ok+=b.p_ok; r.busy+=b.p_busy; r.limited+=b.p_limited; r.day_exhausted=r.day_exhausted||b.p_exhausted; return {ok:true,status:204,json:async()=>({})}; }
+  if(url.includes('/rest/v1/ai_usage')) return {ok:true,status:200,json:async()=>Object.values(st.usage)};
+  if(url.includes('generativelanguage') && !opts.body.includes('콘텐츠 검토') && st.script.length){
+    const sc=st.script.shift(); const model=(url.match(/models\/([^:]+):/)||[])[1]; const b=JSON.parse(opts.body);
+    st.gem.push({model,sc,kind:(b.contents[0].parts[0].text.includes('꼼꼼히 기록하는 사람')?'scan':b.contents[0].parts[0].text.includes('[영상 장면 기록')?'compose':'single'),cfg:b.generationConfig,vm:b.contents[0].parts[1]?.video_metadata,nparts:b.contents[0].parts.length,prompt:b.contents[0].parts[0].text});
+    await new Promise(r=>setTimeout(r,300));
+    const E=(status,error)=>({ok:false,status,json:async()=>({error})});
+    if(sc==='503') return E(503,{code:503,message:'The model is overloaded due to high demand.',status:'UNAVAILABLE'});
+    if(sc==='429m') return E(429,{code:429,message:'quota',status:'RESOURCE_EXHAUSTED',details:[{'@type':'type.googleapis.com/google.rpc.QuotaFailure',violations:[{quotaId:'GenerateRequestsPerMinutePerProjectPerModel-FreeTier'}]},{'@type':'type.googleapis.com/google.rpc.RetryInfo',retryDelay:'2s'}]});
+    if(sc==='429d') return E(429,{code:429,message:'quota',status:'RESOURCE_EXHAUSTED',details:[{'@type':'type.googleapis.com/google.rpc.QuotaFailure',violations:[{quotaId:'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}]},{'@type':'type.googleapis.com/google.rpc.RetryInfo',retryDelay:'40000s'}]});
+    const J=o=>({ok:true,status:200,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(o)}]}}],usageMetadata:{promptTokenCount:12000,candidatesTokenCount:900}})});
+    const r2={...MOCK,title:'숙주 겉절이',sources:['onscreen_text','speech'],ingredients:MOCK.ingredients.slice(1,4),steps:[{text:'[[0]]를 데친다',heat:'강불',seconds:60,cue:'',tip:'',mistake:'',clip:{start:'00:06',end:'00:09'},photo:'00:08'}]};
+    if(sc==='multi') return J({is_food:true,evidence:{speech:'간장 두 숟갈',onscreen_text:'숙주 1봉',caption:'레시피',comments_used:['작성자 1']},recipes:[{...MOCK,sources:['caption','owner_comment','onscreen_text']},r2]});
+    if(sc==='notfood') return J({is_food:false,reason:'맛집 소개 영상이에요',recipes:[]});
+    if(sc==='empty') return J({is_food:true,recipes:[]});
+    if(sc==='cover') return J({is_food:true,evidence:{},recipes:[{...MOCK,cover_time:'00:12',sources:['caption','speech'],steps:MOCK.steps.map((x,i)=>({...x,clip:{start:i?'00:08':'00:02',end:i?'00:14':'00:06'},photo:i?'00:11':'00:04'}))}]});
+    if(sc==='jumble'){ const mk=(t,a,b)=>({text:t,heat:'중불',seconds:0,cue:'',tip:'',mistake:'',clip:{start:a,end:b},photo:a});
+      return J({is_food:true,evidence:{},recipes:[{...MOCK,steps:[mk('1단계','00:03','00:07'),mk('2단계','00:07','00:12'),mk('3단계','00:15','00:19'),mk('4단계','00:11','00:16'),mk('5단계','00:18','00:20')]}]}); }
+    if(sc==='scanlog') return J({is_cooking:true,dishes:['크림 스테이크 파스타'],final_dish_time:'00:02',scenes:[{start:'00:05',end:'00:06',action:'고기에 소금 후추',ingredients:[{name:'소고기',amount_seen:'손바닥 두 개 크기',from:'화면'}],heat:'없음'},{start:'00:12',end:'00:14',action:'생크림 붓기',ingredients:[{name:'생크림',amount_seen:'팩 절반',from:'포장지'}],heat:'중불'}]});
+    if(sc==='scannot') return J({is_cooking:false,reason:'완성된 음식을 먹는 장면만 나와요',scenes:[]});
+    if(sc==='pasta'){ const I=(name,group,q,u,g,ml,est)=>({name,group,original:'',orig_qty:q,orig_unit:u,grams:g,ml:ml||null,primary:ml?'ml':'g',estimated:!!est,buy:!['소금','후추','버터','다진 마늘'].includes(name),brand:'',buy_keyword:name});
+      const st=(text,heat,sec,a,b,ph,cue,tip)=>({text,heat,seconds:sec,cue:cue||'',tip:tip||'',mistake:'',clip:{start:a,end:b},photo:ph});
+      return J({is_food:true,evidence:{speech:'',onscreen_text:'Creamy Steak Pasta',caption:'없음'},recipes:[{title:'크림 스테이크 파스타',summary:'버터 크림 소스에 구운 스테이크를 올린 파스타',servings:2,difficulty:'보통',total_min:25,confidence:'medium',sources:['onscreen_text','visual'],cover_time:'00:02',assumptions:['분량은 화면 속 양을 보고 추정했어요'],
+        ingredients:[I('소고기 스테이크','주재료',300,'g',300),I('페투치니','주재료',200,'g',200),I('생크림','소스',1,'컵',200,200,1),I('파마산 치즈','소스',4,'숟갈',40,0,1),I('버터','소스',2,'숟갈',20,0,1),I('다진 마늘','소스',1,'숟갈',10,0,1),I('소금','양념',null,'약간',2),I('후추','양념',null,'약간',1)],
+        steps:[st('[[0]]에 [[6]]과 [[7]]을 앞뒤로 뿌린다','없음',0,'00:05','00:06','00:05.5'),st('달군 팬에 [[0]]을 올려 앞뒤로 굽는다','강불',240,'00:07','00:10','00:09','겉이 짙은 갈색이 되면','굽는 동안 자주 뒤집지 마세요'),
+          st('끓는 소금물에 [[1]]을 삶는다','강불',600,'00:10','00:11','00:10.5'),st('팬에 [[4]]와 [[5]]을 넣어 녹인다','중불',60,'00:11','00:12','00:11.5'),
+          st('[[2]]를 붓고 [[7]]을 뿌린다','중불',90,'00:12','00:14.8','00:13.5','가장자리가 보글보글 끓으면'),st('[[3]]를 갈아 넣고 저어 녹인다','약불',60,'00:15','00:16.8','00:16','소스가 숟가락을 코팅하면'),
+          st('삶은 [[1]]을 넣고 소스와 버무린다','약불',60,'00:17','00:19.3','00:19')],tools:[],nutrition_per_serving:{kcal:980,carb_g:78,protein_g:45,fat_g:52,sugar_g:4,sodium_mg:900},beginner_notes:['면 삶은 물을 한 컵 남겨 두면 소스 농도 맞추기 좋아요']}]}); }
+    if(sc==='ok') return J({is_food:true,evidence:{},recipes:[{...MOCK,sources:['onscreen_text','speech','visual']}]});
+  }
+  if(url==='https://fake.supabase.co/auth/v1/user'){ const t=(opts.headers.Authorization||'').replace('Bearer ',''); const id=t.replace('tok-',''); const p=DB.profiles.find(x=>x.id===id);
+    return p?{ok:true,status:200,json:async()=>({id, email:p.email||st.userEmail||'kim@example.com', user_metadata:{full_name:'김영석', avatar_url:''}})}:{ok:false,status:401,json:async()=>({})}; }
+  if(url.startsWith('https://fake.supabase.co/storage/v1/object/photos/')){ const path=url.split('/photos/')[1]; PHOTOS.set(path,opts.body); st.uploads=(st.uploads||[]); st.uploads.push(path+' '+opts.body.length+'B'+(opts.headers.Authorization?' AUTH!':'')); return {ok:true,status:200,text:async()=>''}; }
+  const rm=url.match(/^https:\/\/fake\.supabase\.co\/rest\/v1\/(posts|profiles)(\?.*)?$/);
+  if(rm){ const t=rm[1], m=(opts&&opts.method)||'GET';
+    if(m==='POST'){ const row={id:'p'+Math.random().toString(36).slice(2,8), created_at:new Date().toISOString(), ...JSON.parse(opts.body)}; DB[t].push(row); return {ok:true,status:201,json:async()=>[row]}; }
+    if(m==='PATCH' && st.nocol){ return {ok:false,status:400,text:async()=>JSON.stringify({code:'PGRST204',message:"Could not find the 'setup_done' column of 'profiles' in the schema cache"}),json:async()=>({})}; }
+    if(m==='PATCH'){ const id=decodeURIComponent((url.match(/id=eq\.([^&]+)/)||[])[1]); const row=DB[t].find(x=>x.id===id); Object.assign(row,JSON.parse(opts.body)); return {ok:true,status:200,json:async()=>[row]}; } }
+  if(url.startsWith('https://fake.supabase.co/rest/v1/reel_cache')){ st.dbcalls=(st.dbcalls||[]); const m=(opts&&opts.method)||'GET'; st.dbcalls.push(m+' '+(opts&&opts.headers&&opts.headers.apikey));
+    const code=(url.match(/code=eq\.([^&]+)/)||[])[1];
+    if(m==='GET') return {ok:true,status:200,json:async()=>CACHE.has(code)?[CACHE.get(code)]:[]};
+    if(m==='POST'){ const b=JSON.parse(opts.body); CACHE.set(b.code,b); return {ok:true,status:201,json:async()=>({})}; }
+    if(m==='PATCH'){ const b=JSON.parse(opts.body); if(CACHE.has(code)) Object.assign(CACHE.get(code),b); return {ok:true,status:204,json:async()=>({})}; } }
+  if(url.includes('api.apify.com')){ st.apify=JSON.parse(opts.body); await new Promise(r=>setTimeout(r,800));
+    const cap = st.mode==='silent' ? '' : '대패숙주 레시피\n간장 2숟갈 굴소스 1숟갈';
+    return {ok:true,status:200,json:async()=>[{caption:cap,owner_username:'cook',comments: st.mode==='silent'?[{text:'맛있겠다',username:'fan'}]:[{text:'레시피: 설탕 반숟갈 추가!',username:'cook'},{text:'맛있겠다',username:'fan'}],video_url:'https://scontent-ssn1-1.cdninstagram.com/v/a.mp4',duration_seconds: st.mode==='long'?200:40}]}; }
+  if(url.includes('cdninstagram')){ const buf=fs.readFileSync(st.videoFile||path.join(HERE,'reel.webm')); const rg=(opts&&opts.headers&&opts.headers.Range)||null;
+    if(rg){ const m=rg.match(/bytes=(\d+)-(\d*)/); const a=+m[1], b=Math.min(m[2]?+m[2]:buf.length-1, buf.length-1); const part=buf.subarray(a,b+1);
+      st.ranges=(st.ranges||0)+1;
+      return {ok:true,status:206,headers:new Map([['content-type','video/webm'],['content-range',`bytes ${a}-${b}/${buf.length}`],['content-length',String(part.length)]]),body:(async function*(){ yield part; })(),arrayBuffer:async()=>part}; }
+    return {ok:true,status:200,headers:new Map([['content-length',String(buf.length)],['content-type','video/webm']]),arrayBuffer:async()=>buf.buffer.slice(buf.byteOffset,buf.byteOffset+buf.length),body:(async function*(){ yield buf; })()}; }
+  if(url.includes('generativelanguage') && opts.body.includes('콘텐츠 검토')){ const b=JSON.parse(opts.body); const txt=b.contents[0].parts[0].text; const hasImg=b.contents[0].parts.length>1;
+    st.mods=(st.mods||[]); st.mods.push({hasImg});
+    const v={image_safe: !(hasImg && st.unsafeImage), text_safe: !/욕설/.test(txt.split('[글]')[1]||''), category: st.unsafeImage&&hasImg?'sexual':'none', reason: st.unsafeImage&&hasImg?'노출이 있는 사진':''};
+    return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(v)}]}}]})}; }
+  if(url.includes('generativelanguage')){ const b=JSON.parse(opts.body); st.gem.push({vm:b.contents[0].parts[1]?.video_metadata,cfg:b.generationConfig,nparts:b.contents[0].parts.length,prompt:b.contents[0].parts[0].text});
+    await new Promise(r=>setTimeout(r, (st.mode==='long'||st.mode==='cut')?12000:1200));
+    const empty = st.firstEmpty && st.gem.length===1;
+    return {ok:true,status:200,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(empty?{...MOCK,ingredients:[],steps:[]}:MOCK)}]}}]})}; }
+  return {ok:false,status:404,text:async()=>'',json:async()=>({})};
+};
+const types={'.html':'text/html','.js':'text/javascript','.webmanifest':'application/manifest+json','.png':'image/png'};
+http.createServer(async (req,res)=>{
+  const u=new URL(req.url,'http://x');
+  if(u.pathname.startsWith('/__db/')){ const t=u.pathname.split('/')[2]; let raw=''; for await(const c of req) raw+=c;
+    if(!raw){ res.end(JSON.stringify(DB[t])); return; }
+    const b=JSON.parse(raw); if(b.op==='insert'){ const row={id:b.row.id||('r'+Math.random().toString(36).slice(2,8)), created_at:new Date().toISOString(), ...b.row}; DB[t].push(row); res.end(JSON.stringify(row)); return; }
+    if(b.op==='delete'){ DB[t]=DB[t].filter(r=>!b.ids.includes(r.id||r.post_id+'|'+r.user_id)); res.end('{}'); return; } }
+  if(u.pathname.startsWith('/__photo/')){ const buf=PHOTOS.get(decodeURIComponent(u.pathname.slice(9))); res.setHeader('Content-Type','image/jpeg'); res.end(buf||''); return; }
+  if(u.pathname==='/__nocol'){ st.nocol=u.searchParams.get('v')==='1'; res.end('ok'); return; }
+  if(u.pathname==='/__unsafe'){ st.unsafeImage=u.searchParams.get('v')==='1'; res.end('ok'); return; }
+  if(u.pathname==='/__set'){ if(u.searchParams.has('fill')){ st.quotaFill=+u.searchParams.get('fill'); st.quota={}; } if(u.searchParams.has('email')) st.userEmail=u.searchParams.get('email'); st.videoFile=u.searchParams.get('video')||null; st.script=(u.searchParams.get('script')||'').split(',').filter(Boolean); if(u.searchParams.get('resetUsage')) st.usage={}; Object.assign(st,{mode:u.searchParams.get('mode')||'caption',firstEmpty:u.searchParams.get('empty')==='1',gem:[]}); res.end('ok'); return; }
+  if(u.pathname==='/__st'){ res.end(JSON.stringify({uploads:st.uploads,mods:st.mods,posts:DB.posts.map(p=>({kind:p.kind,flagged:p.flagged,title:p.title,photo:p.photo_path})),profiles:DB.profiles,dbcalls:st.dbcalls,cache:[...CACHE.keys()],ranges:st.ranges,apify:st.apify,usage:st.usage,quota:st.quota,lastWho:st.lastWho,fails:st.fails,cacheSrc:[...CACHE.values()].map(c=>Object.keys(c.source||{})),script:st.script,gemModels:st.gem.map(g=>g.model+':'+(g.sc||'')+':'+(g.kind||'')+':'+g.nparts+':'+JSON.stringify(g.cfg&&g.cfg.mediaResolution||'')),gem:st.gem.map(g=>({vm:g.vm,cfg:g.cfg,nparts:g.nparts,hasComment:g.prompt.includes('설탕 반숟갈 추가'),tail:g.prompt.slice(-260)}))})); return; }
+  if(u.pathname.startsWith('/api/')){
+    let raw=''; for await(const c of req) raw+=c; req.body=raw?JSON.parse(raw):{}; req.query=Object.fromEntries(u.searchParams);
+    res.status=c=>{res.statusCode=c;return res;}; res.json=o=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(o));};
+    if(st.mode==='cut') setTimeout(()=>res.socket.destroy(),3000);
+    const {default:h}=await import(ROOT+u.pathname+'.js'); return h(req,res);
+  }
+  let p=path.join(ROOT,u.pathname==='/'?'index.html':u.pathname);
+  if(!fs.existsSync(p)||fs.statSync(p).isDirectory()){res.statusCode=404;res.end();return;}
+  res.setHeader('Content-Type',types[path.extname(p)]||'application/octet-stream'); fs.createReadStream(p).pipe(res);
+}).listen(8788,()=>console.log('up'));

@@ -5,6 +5,8 @@ import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK, qtyCount } from '../li
 import { cacheGet, cachePut, cachePatch } from '../lib/db.js';
 import { generate } from '../lib/gemini.js';
 import { bumpUsage } from '../lib/usage.js';
+import { verifyUser } from '../lib/auth.js';
+import { DAILY_LIMIT, kstMidnight, isTester, whoOf, usedToday, addUse, logFailure, cleanupMaybe } from '../lib/quota.js';
 
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
@@ -119,7 +121,7 @@ const normComments = list => {
 };
 const showComments = list => list.map(c => (c.owner ? '작성자: ' : '') + c.text);
 
-async function run(body, emit, t0) {
+async function run(body, emit, t0, req) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { status: 500, json: { error: 'no_key' } };
   let caption = String(body.caption || '').slice(0, 8000);
@@ -147,6 +149,15 @@ async function run(body, emit, t0) {
       return { status: 200, json: { text: JSON.stringify(hit.recipe), model: hit.model || 'cache', source: { ...(hit.source || {}), videoUrl: hit.video_url || null, cached: true } } };
     }
   }
+
+  // 하루 분석 횟수 (이미 분석된 릴스는 위에서 바로 돌려주므로 세지 않음). 테스터는 제한 없음
+  const user = req && req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
+  const tester = isTester(user), who = req ? whoOf(req, user) : null;
+  if (who && !tester && (await usedToday(who)) >= DAILY_LIMIT) {
+    return { status: 429, json: { error: 'daily_limit', limit: DAILY_LIMIT, resetAt: kstMidnight().toISOString(), member: !!user } };
+  }
+  cleanupMaybe();
+  const countUse = async () => { if (!who || tester) return null; const n = await addUse(who); return n == null ? null : Math.max(0, DAILY_LIMIT - n); };
 
   if (code && !body.fetched && !images.length) {
     emit({ stage: 'fetch' });
@@ -231,12 +242,21 @@ async function run(body, emit, t0) {
   const result = parseResult(out.text);
   if (!result) return { status: 502, json: { error: 'empty_answer', finish: out.finish, notes } };
   source.mode = out.mode || 'single';
-  if (!result.recipes.length) return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, noRecipe: true, notes } };
+  const usesLeft = await countUse();
+  if (!result.recipes.length) return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, noRecipe: true, notes, left: usesLeft, tester } };
   if (code && !images.length) {
-    const { notes: _n, ...src } = source;
+    const { notes: _n, comments: _c, ...src } = source;   // 시청자 댓글 원문은 캐시에 남기지 않음(개인정보 최소화)
     await cachePut(code, { recipe: result, source: src, video_url: source.videoUrl, model: out.model });
   }
-  return { status: 200, json: { text: JSON.stringify(result), model: out.model, source } };
+  return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, left: usesLeft, tester } };
+}
+
+// 실패(또는 레시피를 못 찾음)는 원인을 남겨서, 제보가 없어도 무엇이 고장 났는지 알 수 있게 한다
+async function recordFailure(body, out, t0) {
+  const j = out.json || {};
+  if (out.status === 200 && !j.noRecipe) return;
+  if (j.error === 'daily_limit' || j.error === 'passcode') return;
+  try { await logFailure({ code: shortcodeOf(String(body.link || '')), error: j.error || (j.noRecipe ? 'no_recipe' : 'status_' + out.status), notes: j.notes || [], mode: j.source && j.source.mode, model: j.model, sec: (Date.now() - t0) / 1000 }); } catch {}
 }
 
 export default async function handler(req, res) {
@@ -256,8 +276,9 @@ export default async function handler(req, res) {
     send({ stage: 'start' });
     const hb = setInterval(() => send({ ping: Math.round((Date.now() - t0) / 1000) }), 5000);
     try {
-      const out = await run(body, send, t0);
+      const out = await run(body, send, t0, req);
       send({ done: true, status: out.status, ...out.json });
+      await recordFailure(body, out, t0);
     } catch (e) {
       console.error(e); send({ done: true, status: 500, error: 'server' });
     } finally { clearInterval(hb); res.end(); }
@@ -265,7 +286,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const out = await run(body, () => {}, t0);
+    const out = await run(body, () => {}, t0, req);
+    await recordFailure(body, out, t0);
     return res.status(out.status).json(out.json);
   } catch (e) {
     console.error(e);

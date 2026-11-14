@@ -3,3 +3,6 @@ node_modules/
 .env
 .env.local
 .DS_Store
+tests/*.png
+tests/*.jpg.out
+__pycache__/
