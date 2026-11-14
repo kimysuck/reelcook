@@ -139,6 +139,13 @@ async function run(body, emit, t0, req) {
   const notes = [];
   const code = shortcodeOf(link);
 
+  // "결과가 이상해요": 누가 했는지는 남기지 않고 릴스 코드와 이유만 실패 기록에 남긴 뒤, 캐시를 건너뛰고 새로 분석한다
+  if (body.report) {
+    const why = String(body.report).replace(/[^a-z_]/g, '').slice(0, 20) || 'other';
+    await logFailure({ code, error: 'user_report', notes: [why], sec: 0 }).catch(() => {});
+    body.noCache = true;
+  }
+
   // ⚡ 캐시: 같은 방식(CACHE_V)으로 분석한 결과만 바로 돌려준다
   if (code && !images.length && !body.noCache) {
     const hit = await cacheGet(code);
