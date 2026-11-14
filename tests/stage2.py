@@ -51,9 +51,9 @@ with sync_playwright() as p:
     assert pg.inner_text('.rhead h1')=='내 숙주볶음', 'title not edited'
     assert 'AI 정리 + 직접 고침' in pg.inner_text('.ailabel'), 'edited label missing'
     ing=pg.inner_text('#app'); assert '후추' not in ing, 'deleted ingredient still shown'
-    assert '3 숟갈' in ing, 'edited amount not shown'
+    assert '3숟갈' in ing, 'edited amount not shown'
     pg.click('[data-rt="step"]'); pg.wait_for_timeout(200); stx=pg.inner_text('#app')
-    assert '접시에 담는다' in stx and '간장 3 숟갈' in stx, 'steps not updated / ingredient token lost'
+    assert '접시에 담는다' in stx and '간장 3숟갈' in stx, 'steps not updated / ingredient token lost'
     rec=pg.evaluate("JSON.parse(localStorage.getItem('rc_recipes'))[0].recipe")
     soy=[i for i in rec['ingredients'] if i['name']=='간장'][0]; print('soy', soy['orig_qty'], soy['ml'])
     assert soy['orig_qty']==3 and abs(soy['ml']-30)<0.01, 'gram/ml not rescaled'
