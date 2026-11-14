@@ -501,7 +501,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.7';
+const VERSION='v1.7.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -658,14 +658,17 @@ function precise(ing, f){
   if (cnt!=null) return {big:`${frac(cnt)}${ing.count_unit||'개'}`, alt:''};
   return {big:'적당량', alt:''};
 }
-const VAGUE = /^(약간|적당히|적당량|톡톡|조금|기호껏|취향껏)$/;
+// 말로 된 분량("적당히", "듬뿍", "라면이 잠길 만큼")은 숫자로 바꾸거나 "약간"으로 뭉개지 않고 원래 표현 그대로 보여 준다
+const UNIT_ONLY = /^(g|kg|ml|l|cc|컵|종이컵|숟갈|숟가락|밥숟가락|스푼|큰술|작은술|t|개|알|쪽|대|줌|꼬집|장|봉|봉지|팩|캔|공기|마리|모|인분)$/i;
+const isWordAmt = ing => ing.orig_qty==null && !!(ing.orig_unit||'').trim() && !UNIT_ONLY.test(ing.orig_unit.trim());
 function original(ing, f){
   const u=(ing.orig_unit||'').trim();
-  if (u && VAGUE.test(u)) return {big:'약간', alt:'맛보며 기호껏'};
-  if (ing.orig_qty!=null && u) return {big:`${frac(ing.orig_qty*f)}${/^[a-z]+$/i.test(u)?'':' '}${u}`, alt:''};
+  if (isWordAmt(ing)) return {big:u, alt:'', word:true};
+  if (ing.orig_qty!=null && u) return {big:`${frac(ing.orig_qty*f)}${u}`, alt:''};   // 2숟갈, 200g (숫자와 단위는 붙여 쓴다)
   return null;
 }
 function amountOf(ing, f){
+  if (isWordAmt(ing)) return original(ing,f);
   const pr=precise(ing,f);
   if (pr.big==='적당량'){ const o=original(ing,f); if (o) return {big:o.big, alt:o.alt}; }
   if (S.unit==='orig'){
@@ -976,7 +979,37 @@ function bindImport(){
 /* ---------- 레시피 상세 ---------- */
 function openRecipe(r, savedId, set){ clearMedia(); S.recipeSet=set&&set.length>1?set:null; S.setIdx=0; S.setSaved={}; if(!set) S.setMedia=null; S.recipe=r; S.recipeSavedId=savedId; S.servings=r.servings; S.rtab='ing'; S.have={}; window.scrollTo(0,0); render(); }
 function k(){ return S.servings / S.recipe.servings; }
-function stepHTML(text){ const r=S.recipe; return esc(text).replace(/\[\[(\d+)\]\]/g,(m,i)=>{ const ing=r.ingredients[+i]; if(!ing) return ''; const a=amountOf(ing,k()); return `<b>${esc(ing.name)} ${esc(a.big==='적당량'||a.big==='약간'?'약간':a.big)}</b>`; }); }
+/* 단계 문장: [[번호]] 자리에 "재료 이름 + 분량"을 넣는다.
+   - AI가 그 뒤에 분량을 한 번 더 쓴 것("[[2]] 2개를")은 지운다 → "계란 2개 2개" 방지
+   - 뒤에 붙은 조사는 넣은 말의 받침에 맞춘다 → "가루 약간를" 방지
+   - 말로 된 분량(약간·듬뿍)은 이름만 넣는다(문장 속 "약간 뿌린다"가 그대로 살게) */
+const PARTICLE = '으로|이랑|을|를|이|가|은|는|과|와|로|랑';
+const JOSA = {'을':['을','를'],'를':['을','를'],'이':['이','가'],'가':['이','가'],'은':['은','는'],'는':['은','는'],'과':['과','와'],'와':['과','와'],'으로':['으로','로'],'로':['으로','로'],'이랑':['이랑','랑'],'랑':['이랑','랑']};
+function batchim(word){   // 0: 받침 없음, 1: 받침 있음, 2: ㄹ 받침
+  const c=String(word).trim().slice(-1); const n=c.charCodeAt(0)-0xAC00;
+  if (n>=0 && n<11172){ const j=n%28; return j===0?0:j===8?2:1; }
+  if (/[0-9]/.test(c)) return '178'.includes(c)?2:'036'.includes(c)?1:0;   // 일·칠·팔 / 영·삼·육
+  if (/[½¼¾⅓⅔]/.test(c)) return 2;   // ~분의 일
+  return /g$/i.test(c)?1:0;   // g(그램), ml·L(리터)
+}
+function josa(word, p){ const [a,b]=JOSA[p]||[p,p], bc=batchim(word); return (p==='으로'||p==='로') ? (bc===1?a:b) : (bc?a:b); }
+const AMT_UNITS = 'kg|g|ml|cc|l|종이컵|컵|밥숟가락|숟가락|숟갈|스푼|큰술|작은술|개|알|쪽|대|줌|꼬집|장|봉지|봉|팩|캔|공기|마리|모|t';
+function fillStep(text, r, f, html){
+  const e=html?esc:(x=>x), parts=String(text||'').split(/\[\[(\d+)\]\]/);
+  let out=e(parts[0]);
+  for (let p=1;p<parts.length;p+=2){
+    const ing=r.ingredients[+parts[p]]; let next=parts[p+1]||'';
+    if (!ing){ out+=e(next); continue; }
+    const a=amountOf(ing,f), word=a.word||a.big==='적당량', shown=word?ing.name:`${ing.name} ${a.big}`;
+    if (!word){ const u=[(ing.orig_unit||'').trim(), (ing.count_unit||'').trim()].filter(Boolean).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+      const dup=new RegExp(`^(${PARTICLE})?\\s*(?:\\d+(?:[./]\\d+)?|[½¼¾⅓⅔]|반|한|두|세|네)\\s*(?:${[...u, AMT_UNITS].join('|')})(?=$|[^가-힣]|${PARTICLE})`, 'i');
+      next=next.replace(dup, '$1'); }
+    next=next.replace(new RegExp(`^(${PARTICLE})(?=$|[^가-힣])`), m=>josa(shown,m));
+    out+=(html?`<b>${esc(shown)}</b>`:shown)+e(next);
+  }
+  return out;
+}
+function stepHTML(text){ return fillStep(text, S.recipe, k(), true); }
 const SRC_NAME={caption:'캡션', owner_comment:'작성자 댓글', viewer_comment:'시청자 댓글(추정에만)', onscreen_text:'화면 자막', speech:'음성 설명', visual:'화면 장면'};
 function srcText(r){ return [...new Set((Array.isArray(r.sources)?r.sources:[]).map(x=>SRC_NAME[x]).filter(Boolean))].join(', '); }
 function heatCls(h){ return h==='약불'?'h1':h==='중불'?'h2':h==='강불'?'h3':'h0'; }
@@ -1120,7 +1153,7 @@ function openBadResult(){
 /* ---------- 저장한 레시피 직접 수정 ---------- */
 let ED=null;
 function amtText(i){
-  if (i.orig_unit && (i.orig_qty!=null || VAGUE.test(i.orig_unit.trim()))) return `${i.orig_qty!=null?roundAmt(i.orig_qty)+(/^[a-z]+$/i.test(i.orig_unit.trim())?'':' '):''}${i.orig_unit}`.trim();
+  if (i.orig_unit && (i.orig_qty!=null || isWordAmt(i))) return `${i.orig_qty!=null?roundAmt(i.orig_qty):''}${i.orig_unit}`.trim();
   if (i.grams!=null && i.primary!=='ml' && i.primary!=='count') return `${roundAmt(i.grams)}g`;
   if (i.ml!=null) return `${roundAmt(i.ml)}ml`;
   if (i.count!=null) return `${roundAmt(i.count)}${i.count_unit||'개'}`;
@@ -1720,7 +1753,7 @@ async function saveProfile(){
 /* ---------- 공유 시트 ---------- */
 function recipeText(r){
   const k2=S.servings/r.servings;
-  return `${r.title} (${S.servings}인분)\n\n[재료]\n${r.ingredients.map(i=>`- ${i.name} ${amountOf(i,k2).big}`).join('\n')}\n\n[만드는 법]\n${r.steps.map((st,i)=>`${i+1}. ${st.text.replace(/\[\[(\d+)\]\]/g,(m,x)=>{ const g=r.ingredients[+x]; return g?`${g.name} ${amountOf(g,k2).big}`:''; })}`).join('\n')}${r.source&&r.source.link?`\n\n원본: ${r.source.link}`:''}\n— 릴쿡으로 정리함`;
+  return `${r.title} (${S.servings}인분)\n\n[재료]\n${r.ingredients.map(i=>`- ${i.name} ${amountOf(i,k2).big}`).join('\n')}\n\n[만드는 법]\n${r.steps.map((st,i)=>`${i+1}. ${fillStep(st.text, r, k2, false)}`).join('\n')}${r.source&&r.source.link?`\n\n원본: ${r.source.link}`:''}\n— 릴쿡으로 정리함`;
 }
 function openShareSheet(r){
   $('#layer').innerHTML=`<div class="modal"><div class="sheet"><div class="row" style="justify-content:space-between"><h3>공유하기</h3><button class="x" id="shClose" aria-label="닫기">${IC.x}</button></div>
