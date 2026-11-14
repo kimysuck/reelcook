@@ -801,6 +801,17 @@ async function streamAnalyze(body, onEvent){
   if (!final) throw new Error('__cut');
   return final;
 }
+// 서버가 시간 안에 못 끝내면 하던 일을 넘겨준다 → 앱이 바로 이어서 요청한다 (최대 3번)
+async function analyzeReq(body, onEvent){
+  let b=body;
+  for (let i=0;;i++){
+    const d=await streamAnalyze(b, onEvent);
+    if (!(d && d.continue && d.resume) || i>=3) return d;
+    onEvent({stage:'continue', hop:d.hop});
+    const {report, images, ...rest}=body;   // 신고 기록은 처음 한 번만
+    b={...rest, resume:d.resume, hop:d.hop, fetched:true, noCache:true};
+  }
+}
 async function analyze(opts={}){
   const igLink=/instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
@@ -811,7 +822,7 @@ async function analyze(opts={}){
   try{
     const body={caption:S.caption.trim(), link:S.link.trim(), fromVideo:S.fromVideo, noCache:!!opts.noCache, ...(opts.report?{report:opts.report}:{})};
     if (S.images.length){ body.images=[]; for (const x of S.images) body.images.push({mime:'image/jpeg', data: await blobToB64(x.blob)}); }
-    const data=await streamAnalyze(body, ev=>{
+    const data=await analyzeReq(body, ev=>{
       if (ev.stage==='cached'){ S.phase='cached'; render(); }
       else if (ev.stage==='fetch'){ S.phase='fetch'; render(); }
       else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; if (ev.videoSrc) prefetchReel(ev.videoSrc); render(); }
@@ -822,6 +833,7 @@ async function analyze(opts={}){
       else if (ev.stage==='wait'){ S.note2=`무료 사용량 속도 제한 때문에 ${ev.sec}초 기다렸다가 이어서 분석해요…`; render(); }
       else if (ev.stage==='scan'){ S.phase='scan'; S.note2=''; render(); }
       else if (ev.stage==='compose'){ S.phase='compose'; S.scenes=ev.scenes; S.note2=''; render(); }
+      else if (ev.stage==='continue'){ S.note2=`영상을 꼼꼼히 보느라 시간이 더 걸려서 이어서 분석하는 중이에요 (${ev.hop+1}번째)`; render(); }
       else if (ev.stage==='retry'){ S.note2='레시피를 확실히 찾지 못해서 영상 자막과 음성까지 더 꼼꼼하게 다시 보는 중…'; render(); }
     });
     S.errCode = data.error ? [data.error, ...(data.notes||[])].filter(Boolean).join(' · ').slice(0,200) : '';
@@ -1226,7 +1238,7 @@ function viewEval(){
     <ol class="muted evhow"><li>결과를 보고 ✓ 맞음 / ✗ 틀림을 골라요. 틀렸으면 이유도 골라요.</li><li>"결과 요약 복사"를 눌러 Claude에게 붙여 넣어요.</li><li>고친 뒤 같은 링크로 다시 돌려 맞은 비율을 비교해요.</li></ol>
     <textarea id="evIn" style="min-height:200px;margin-top:14px" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..."></textarea>
     <label class="chk"><input type="checkbox" id="evFresh" checked> 저장된 분석을 쓰지 않고 새로 분석 (고친 뒤 비교할 때 필요)</label>
-    <p class="muted" style="font-size:.8rem;margin-top:8px">3개씩 동시에 분석해요. 릴스 하나에 보통 30초~2분 걸리고, 분석하는 동안 화면은 켜진 채로 있어요. 다른 앱으로 나가면 멈출 수 있어요. 평가 기록은 이 폰에만 저장돼요.</p>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">2개씩 동시에 분석해요. 릴스 하나에 보통 30초~2분 걸리고, 분석하는 동안 화면은 켜진 채로 있어요. 다른 앱으로 나가면 멈출 수 있어요. 평가 기록은 이 폰에만 저장돼요.</p>
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
@@ -1265,17 +1277,17 @@ function bindEval(){
     if (!x.recipes){ toast('이 결과는 내용을 저장하지 못했어요'); return; }
     const set=x.recipes.map(r=>normalize(JSON.parse(JSON.stringify(r)))); S.replaceId=null; S.setMedia=null; openRecipe(set[0], null, set); prepareMedia(set[0]); });
 }
-// 3개씩 동시에 분석한다(무료 AI 한도가 차면 서버가 다른 모델로 넘기거나 잠깐 기다린다). 평가 중에는 화면이 꺼지지 않게 한다.
-const EV_PAR=3;
-const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기'};
+// 2개씩 동시에 분석한다(무료 AI 한도가 차면 서버가 다른 모델로 넘기거나 잠깐 기다린다). 평가 중에는 화면이 꺼지지 않게 한다.
+const EV_PAR=2;
+const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기', continue:'시간이 더 걸려 이어서 분석 중'};
 let evTick=null;
 function evTickUI(){ document.querySelectorAll('[data-evrun]').forEach(el=>{ const x=S.ev&&S.ev.items[+el.dataset.evrun]; if (x&&x.status==='run'&&x.t0) el.textContent=`${EV_STAGE[x.stage]||'분석 중'} · ${Math.round((Date.now()-x.t0)/1000)}초`; }); }
 async function evOne(x){
   x.status='run'; x.stage='start'; x.t0=Date.now(); evDraw();
   try{
-    const d=await streamAnalyze({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ev=>{ if (ev.stage){ x.stage=ev.stage; evTickUI(); } });
+    const d=await analyzeReq({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ev=>{ if (ev.stage){ x.stage=ev.stage; evTickUI(); } });
     x.sec=Math.round((Date.now()-x.t0)/1000);
-    if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · ');
+    if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=[ERR[d.error]||d.error||d.status, ...(d.notes||[])].join(' · ').slice(0,300);
       if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; if (!evStop) toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); evStop=true; } }
     else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
       if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
