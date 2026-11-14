@@ -461,6 +461,18 @@ html.nosplash #splash{display:none}
 .legal{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:18px;font-size:.84rem}
 .legal button{color:var(--ink2);text-decoration:underline;text-underline-offset:3px;padding:2px 0}
 .legal button.danger{color:var(--hot)}
+.opt.why{flex-direction:column}.opt.why button{text-align:left;padding:0 14px}.opt.why button+button{border-left:0;border-top:1.5px solid var(--ink)}
+.btn.link.bad{display:inline-flex;gap:6px;align-items:center;margin-top:10px;font-size:.88rem;color:var(--sub)}
+input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13px 14px;background:var(--paper);font-size:1rem}
+.erow{display:flex;gap:6px;align-items:flex-start;margin-top:8px}.erow input{flex:1;min-width:0}.erow input.amt{flex:.8}
+.erow textarea{flex:1;min-height:76px}.erow .no{font-weight:700;color:var(--pri);padding-top:14px;width:18px}.erow .x{flex:none;padding:12px 4px;color:var(--sub)}
+.sheet.edit .btn.link{display:inline-flex;gap:6px;align-items:center;margin-top:8px}
+.chk{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:.92rem}
+.evsum{margin-top:10px;font-size:1rem}.evsum .ok{color:var(--herb);font-weight:700}.evsum .ng{color:var(--hot);font-weight:700}
+.evlist{margin-top:14px}.evi{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px}.evi.ok{border-color:var(--herb)}.evi.ng{border-color:var(--hot)}
+.evh{display:flex;gap:8px;align-items:center;font-size:.84rem}.evh .no{font-weight:700}.evh .cd{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
+.evt{font-weight:700;margin-top:6px}.evb{gap:6px;margin-top:10px}.evb .mk{flex:1;min-height:42px;border:1.5px solid var(--line);border-radius:10px;font-weight:700}
+.evb .mk.on{background:var(--herb);border-color:var(--herb);color:#fff}.evb .mk.ng.on{background:var(--hot);border-color:var(--hot)}.evi input{margin-top:8px}
 </style>
 </head>
 <body>
@@ -487,7 +499,7 @@ html.nosplash #splash{display:none}
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.6';
+const VERSION='v1.7';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -499,6 +511,7 @@ const IC={
   camera:SV('<path d="M4 8h3l1.5-2.5h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'), image:SV('<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 2.5-2.5L20 19"/>'),
   refresh:SV('<path d="M19 12a7 7 0 1 1-2-4.9"/><path d="M19 4v4h-4"/>'), trash:SV('<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>'),
   heart:SV('<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.5a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z"/>'), heartOn:SV('<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.5a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z" fill="currentColor"/>'),
+  edit:SV('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'), flag:SV('<path d="M5 21V4"/><path d="M5 4.5h12l-2.5 4 2.5 4H5"/>'), plus:SV('<path d="M12 5v14M5 12h14"/>'),
   book:SV('<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>'), chat:SV('<path d="M4 5.5h16v10H9l-5 4z"/>'), shield:SV('<path d="M12 3.5 5 6v5.5c0 4.3 3 7.6 7 9 4-1.4 7-4.7 7-9V6z"/>'), sun:SV('<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
 };
 const gauge=(n)=>`<span class="gauge g${n}" aria-hidden="true"><i></i><i></i><i></i></span>`;
@@ -550,7 +563,7 @@ async function backfillCovers(){
     document.querySelectorAll(`[data-open="${CSS.escape(d.id)}"] .pic`).forEach(el=>el.innerHTML=`<img src="${c}" alt="">`);
   }
 }
-function openSaved(id){ const d=S.my.find(x=>x.id===id); if(!d) return; const rec=normalize(JSON.parse(JSON.stringify(d.recipe))); openRecipe(rec, d.id); restoreMedia(rec, d.id); }
+function openSaved(id){ const d=S.my.find(x=>x.id===id); if(!d) return; S.replaceId=null; const rec=normalize(JSON.parse(JSON.stringify(d.recipe))); openRecipe(rec, d.id); restoreMedia(rec, d.id); }
 const tileHTML=(d,del=true)=>{ const r=d.recipe||{}; return `<div class="tile" data-open="${esc(d.id)}" role="button" tabindex="0" aria-label="${esc(r.title)}">${coverHTML(r)}
   <div class="t">${esc(r.title)}</div><div class="s"><span>${esc(r.total_min||'?')}분</span><span>${esc(r.servings)}인분</span></div>
   ${del?`<button class="del" data-del="${esc(d.id)}" aria-label="삭제">${IC.trash}</button>`:''}</div>`; };
@@ -652,6 +665,7 @@ function original(ing, f){
 }
 function amountOf(ing, f){
   const pr=precise(ing,f);
+  if (pr.big==='적당량'){ const o=original(ing,f); if (o) return {big:o.big, alt:o.alt}; }
   if (S.unit==='orig'){
     const o=original(ing,f);
     if (o) return {big:o.big, alt: o.alt || (pr.big!=='적당량' ? `≈ ${pr.big}` : '')};
@@ -788,11 +802,12 @@ async function streamAnalyze(body, onEvent){
 async function analyze(opts={}){
   const igLink=/instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
+  S.replaceId=opts.replaceId||null;
   S.busy=true; S.error=''; S.errCode=''; S.canRetry=false; S.shareNote=''; S.t0=S.t0&&S.phase==='frames'?S.t0:Date.now(); S.fetched=null; S.note2='';
   S.phase = igLink && !S.images.length ? 'fetch' : 'analyze'; render();
   clearInterval(tick); tick=setInterval(()=>{ const el=$('#elapsed'); if(el) el.textContent=`${Math.round((Date.now()-S.t0)/1000)}초`; },1000);
   try{
-    const body={caption:S.caption.trim(), link:S.link.trim(), fromVideo:S.fromVideo, noCache:!!opts.noCache};
+    const body={caption:S.caption.trim(), link:S.link.trim(), fromVideo:S.fromVideo, noCache:!!opts.noCache, ...(opts.report?{report:opts.report}:{})};
     if (S.images.length){ body.images=[]; for (const x of S.images) body.images.push({mime:'image/jpeg', data: await blobToB64(x.blob)}); }
     const data=await streamAnalyze(body, ev=>{
       if (ev.stage==='cached'){ S.phase='cached'; render(); }
@@ -832,7 +847,8 @@ async function analyze(opts={}){
     S.setMedia=rec=>({videoBlob:localVideo, shotBlobs: useShots ? rec.steps.map(st=> st.frame!=null && imgs[st.frame] ? imgs[st.frame].blob : null) : null});
     openRecipe(set[0], null, set);
     prepareMedia(set[0], S.setMedia(set[0]));
-    if (set.length>1) toast(`이 릴스에서 레시피 ${set.length}개를 찾았어요`);
+    if (S.replaceId) toast('새로 분석했어요. 저장한 레시피를 바꾸려면 "바꾸기"를 누르세요');
+    else if (set.length>1) toast(`이 릴스에서 레시피 ${set.length}개를 찾았어요`);
     else if (data.left!=null && data.left<=5) toast(`오늘 남은 분석 ${data.left}회`);
   }catch(e){
     const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
@@ -853,6 +869,7 @@ function render(){
   if (S.tab==='import'){ app.innerHTML=viewImport(); bindImport(); }
   if (S.tab==='box'){ app.innerHTML=viewBox(); bindBox(); }
   if (S.tab==='feed'){ app.innerHTML=viewFeed(); bindFeed(); }
+  if (S.tab==='eval'){ app.innerHTML=viewEval(); bindEval(); }
 }
 let installEvt=null;
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); installEvt=e; if(S.tab==='import'&&!S.recipe&&!S.busy) render(); });
@@ -1004,14 +1021,15 @@ function viewRecipe(){
     ${pick}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
-    <div class="ailabel"><b>AI 정리</b><span>AI가 릴스를 보고 만든 레시피예요. 분량, 시간, 영양은 틀릴 수 있어요.${srcText(r)?`<br>근거: ${srcText(r)}`:''}</span></div>
+    <div class="ailabel"><b>${r.edited?'AI 정리 + 직접 고침':'AI 정리'}</b><span>AI가 릴스를 보고 만든 레시피${r.edited?'를 내가 직접 고쳤어요':'예요'}. 분량, 시간, 영양은 틀릴 수 있어요.${srcText(r)?`<br>근거: ${srcText(r)}`:''}</span></div>
+    ${src.link?`<button class="btn link bad" id="badResult">${IC.flag}결과가 이상해요</button>`:''}
     <div class="meta"><span>${IC.clock}${esc(r.total_min||'?')}분</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}${conf}${src.cached?'<span>저장된 분석</span>':''}</div>
     ${r.assumptions.length&&r.confidence!=='high'?`<div class="note" style="margin-top:14px">${r.assumptions.map(esc).join('<br>')}</div>`:''}
     ${src.caption||(src.comments&&src.comments.length)||src.link?`<details class="origin"><summary>원본 캡션과 댓글${IC.down}</summary><div class="body">
       ${src.caption?esc(src.caption):''}
       ${(src.comments||[]).map(c=>`<div class="cm">${esc(c)}</div>`).join('')}
       ${src.link?`<p style="margin-top:10px"><a href="${esc(src.link)}" target="_blank" rel="noopener">인스타에서 보기</a></p>`:''}
-      ${src.link&&!S.recipeSavedId?`<button class="btn link" id="reAnalyze" style="margin-top:8px">처음부터 다시 분석하기</button>`:''}</div></details>`:''}
+</div></details>`:''}
   </div>
   <div class="serv"><div class="lbl">몇 인분 만들까요<small>원래 ${r.servings}인분, 양은 자동으로 바뀌어요</small></div>
     <div class="ctl"><button id="sm" aria-label="1인분 줄이기">−</button><b>${S.servings}</b><button id="sp" aria-label="1인분 늘리기">+</button></div></div>
@@ -1019,7 +1037,8 @@ function viewRecipe(){
   ${body}
   <div style="height:20px"></div>
   <div class="actbar" id="actbar"><div class="wrap">
-    <button class="icb ${S.recipeSavedId?'on':''}" id="save">${S.recipeSavedId?IC.saved:IC.save}${S.recipeSavedId?'저장됨':'저장'}</button>
+    <button class="icb ${S.recipeSavedId?'on':''}" id="save">${S.recipeSavedId?IC.saved:IC.save}${S.recipeSavedId?'저장됨':S.replaceId?'바꾸기':'저장'}</button>
+    ${S.recipeSavedId?`<button class="icb" id="editBtn">${IC.edit}수정</button>`:''}
     <button class="icb" id="shareBtn">${IC.share}공유</button>
     <button class="btn pri" id="cookBtn">요리 시작</button>
   </div></div>`;
@@ -1061,8 +1080,178 @@ function bindRecipe(){
   };
   $('#save').onclick=saveRecipe;
   $('#cookBtn').onclick=()=>openCook(0);
-  const ra=$('#reAnalyze'); if(ra) ra.onclick=()=>{ const l=S.recipe.source.link; stopAllTimers(); clearMedia(); S.recipe=null; S.tab='import'; resetInput(); S.link=l; analyze({noCache:true}); };
+  const br=$('#badResult'); if(br) br.onclick=openBadResult;
+  const eb=$('#editBtn'); if(eb) eb.onclick=openEditor;
   $('#shareBtn').onclick=()=>openShareSheet(S.recipe);
+}
+
+/* ---------- 결과가 이상해요: 이유를 남기고 캐시를 건너뛰어 처음부터 다시 분석 ---------- */
+const BAD_WHY=[['amount','재료나 분량이 틀려요'],['steps','순서가 이상해요'],['missing','빠진 레시피가 있어요'],['wrong_dish','다른 요리예요'],['other','그 밖의 문제']];
+function openBadResult(){
+  const r=S.recipe, link=r&&r.source&&r.source.link; if (!link) return;
+  let why='';
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet"><div class="row" style="justify-content:space-between"><h3>무엇이 이상한가요</h3><button class="x" id="bdx" aria-label="닫기">${IC.x}</button></div>
+    <div class="opt why">${BAD_WHY.map(([v,l])=>`<button data-why="${v}">${l}</button>`).join('')}</div>
+    <p class="muted" style="font-size:.84rem;margin-top:12px">저장된 분석을 쓰지 않고 AI가 이 릴스를 처음부터 다시 분석해요. 오늘 분석 횟수 1회를 써요. 고른 이유와 릴스 주소는 분석 품질을 고치는 데만 쓰고, 누가 알렸는지는 남기지 않아요.</p>
+    ${S.recipeSavedId?'<p class="muted" style="font-size:.84rem;margin-top:6px">저장한 레시피는 새 결과를 보고 "바꾸기"를 눌러야 바뀌어요.</p>':''}
+    <div class="row" style="margin-top:16px"><button class="btn ghost" style="flex:1" id="bdc">취소</button><button class="btn pri" style="flex:1" id="bdgo" disabled>다시 분석</button></div></div></div>`;
+  document.querySelectorAll('[data-why]').forEach(b=>b.onclick=()=>{ why=b.dataset.why; document.querySelectorAll('[data-why]').forEach(x=>x.classList.toggle('on',x===b)); $('#bdgo').disabled=false; });
+  $('#bdx').onclick=$('#bdc').onclick=()=>{ $('#layer').innerHTML=''; };
+  $('#bdgo').onclick=()=>{ const replaceId=S.recipeSavedId||null; $('#layer').innerHTML='';
+    closePlayer(true); stopAllTimers(); clearMedia(); S.recipe=null; S.tab='import'; resetInput(); S.link=link;
+    analyze({noCache:true, report:why||'other', replaceId}); };
+}
+
+/* ---------- 저장한 레시피 직접 수정 ---------- */
+let ED=null;
+function amtText(i){
+  if (i.orig_unit && (i.orig_qty!=null || VAGUE.test(i.orig_unit.trim()))) return `${i.orig_qty!=null?roundAmt(i.orig_qty)+(/^[a-z]+$/i.test(i.orig_unit.trim())?'':' '):''}${i.orig_unit}`.trim();
+  if (i.grams!=null && i.primary!=='ml' && i.primary!=='count') return `${roundAmt(i.grams)}g`;
+  if (i.ml!=null) return `${roundAmt(i.ml)}ml`;
+  if (i.count!=null) return `${roundAmt(i.count)}${i.count_unit||'개'}`;
+  return '';
+}
+// "2 숟갈", "200g", "1/2컵", "약간" → 재료 분량
+function applyAmt(ing, text){
+  const t=String(text||'').trim(), m=t.match(/^(\d+(?:\.\d+)?|\d+\/\d+)\s*(.*)$/);
+  ing.original=t; ing.estimated=false;
+  if (!m){ Object.assign(ing,{orig_qty:null, orig_unit:t||'약간', grams:null, ml:null, count:null}); return; }
+  const q=m[1].includes('/') ? (+m[1].split('/')[0])/(+m[1].split('/')[1]||1) : +m[1], u=m[2].trim();
+  if (ing.orig_qty>0 && (ing.orig_unit||'').trim()===u){ const f=q/ing.orig_qty; ['grams','ml','count'].forEach(x=>{ if (ing[x]!=null) ing[x]=ing[x]*f; }); }
+  else { Object.assign(ing,{grams:null, ml:null, count:null});
+    if (/^(g|그램)$/i.test(u)) Object.assign(ing,{grams:q, primary:'g'}); else if (/^kg$/i.test(u)) Object.assign(ing,{grams:q*1000, primary:'g'});
+    else if (/^(ml|밀리리터)$/i.test(u)) Object.assign(ing,{ml:q, primary:'ml'}); else if (/^(l|리터)$/i.test(u)) Object.assign(ing,{ml:q*1000, primary:'ml'}); }
+  ing.orig_qty=q; ing.orig_unit=u||'개';
+}
+function openEditor(){
+  const r=S.recipe; if (!r || !S.recipeSavedId) return;
+  const name=i=>r.ingredients[i]?r.ingredients[i].name:'';
+  ED={ title:r.title, servings:r.servings,
+    ings:r.ingredients.map((x,i)=>({old:i, name:x.name, amt:amtText(x), amt0:amtText(x)})),
+    steps:r.steps.map((x,i)=>{ const plain=String(x.text||'').replace(/\[\[(\d+)\]\]/g,(m,k)=>name(+k)); return {old:i, text:plain, text0:plain}; }) };
+  drawEditor();
+}
+function drawEditor(){
+  const e=ED;
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet edit"><div class="row" style="justify-content:space-between"><h3>레시피 수정</h3><button class="x" id="edx" aria-label="닫기">${IC.x}</button></div>
+    <label class="fl">제목</label><input type="text" id="edT" maxlength="60" value="${esc(e.title)}">
+    <label class="fl">기본 인분</label><input type="number" id="edS" min="1" max="12" value="${e.servings}" style="width:90px">
+    <label class="fl">재료 <small class="muted">분량은 "2 숟갈", "200g", "약간"처럼</small></label>
+    ${e.ings.map((x,i)=>`<div class="erow"><input type="text" data-in="${i}" value="${esc(x.name)}" placeholder="재료" aria-label="재료 이름"><input type="text" data-ia="${i}" value="${esc(x.amt)}" placeholder="분량" aria-label="분량" class="amt"><button class="x" data-idel="${i}" aria-label="재료 빼기">${IC.x}</button></div>`).join('')}
+    <button class="btn link" id="edAddI">${IC.plus}재료 더하기</button>
+    <label class="fl">만드는 법</label>
+    ${e.steps.map((x,i)=>`<div class="erow"><span class="no">${i+1}</span><textarea data-st="${i}" aria-label="${i+1}단계">${esc(x.text)}</textarea><button class="x" data-sdel="${i}" aria-label="단계 빼기">${IC.x}</button></div>`).join('')}
+    <button class="btn link" id="edAddS">${IC.plus}단계 더하기</button>
+    <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="edc">취소</button><button class="btn pri" style="flex:1" id="eds">저장</button></div>
+    <div id="ederr"></div></div></div>`;
+  const pull=()=>{ e.title=$('#edT').value; e.servings=$('#edS').value;
+    document.querySelectorAll('[data-in]').forEach(x=>e.ings[+x.dataset.in].name=x.value);
+    document.querySelectorAll('[data-ia]').forEach(x=>e.ings[+x.dataset.ia].amt=x.value);
+    document.querySelectorAll('[data-st]').forEach(x=>e.steps[+x.dataset.st].text=x.value); };
+  document.querySelectorAll('[data-idel]').forEach(b=>b.onclick=()=>{ pull(); e.ings.splice(+b.dataset.idel,1); drawEditor(); });
+  document.querySelectorAll('[data-sdel]').forEach(b=>b.onclick=()=>{ pull(); e.steps.splice(+b.dataset.sdel,1); drawEditor(); });
+  $('#edAddI').onclick=()=>{ pull(); e.ings.push({old:-1, name:'', amt:'', amt0:null}); drawEditor(); };
+  $('#edAddS').onclick=()=>{ pull(); e.steps.push({old:-1, text:'', text0:null}); drawEditor(); };
+  $('#edx').onclick=$('#edc').onclick=()=>{ ED=null; $('#layer').innerHTML=''; };
+  $('#eds').onclick=async()=>{ pull(); await saveEdit(); };
+}
+async function saveEdit(){
+  const e=ED, r=S.recipe, id=S.recipeSavedId, err=t=>{ $('#ederr').innerHTML=`<div class="err">${esc(t)}</div>`; };
+  const ings=e.ings.filter(x=>x.name.trim()), steps=e.steps.filter(x=>x.text.trim());
+  if (!e.title.trim()) return err('제목을 적어 주세요.');
+  if (!ings.length || !steps.length) return err('재료와 만드는 법이 하나 이상 있어야 해요.');
+  const map={}; ings.forEach((x,i)=>{ if (x.old>=0) map[x.old]=i; });
+  const rec=JSON.parse(JSON.stringify(r));
+  rec.title=e.title.trim().slice(0,60); rec.servings=Math.min(12, Math.max(1, Math.round(+e.servings)||r.servings));
+  rec.ingredients=ings.map(x=>{ const g=x.old>=0 ? {...r.ingredients[x.old]} : {group:'기타', buy:true, brand:'', buy_keyword:''};
+    g.name=x.name.trim().slice(0,40); if (x.amt!==x.amt0) applyAmt(g, x.amt); if (x.old<0) g.buy_keyword=g.name; return g; });
+  // 고치지 않은 단계는 재료 표시([[번호]])를 그대로 살리고 번호만 새 순서로 맞춘다. 고친 단계는 쓴 글 그대로.
+  rec.steps=steps.map(x=>{ if (x.old<0) return {text:x.text.trim(), heat:'', seconds:0, cue:'', tip:'', mistake:''};
+    const st={...r.steps[x.old]};
+    st.text = x.text===x.text0 ? String(st.text||'').replace(/\[\[(\d+)\]\]/g,(m,k)=> map[+k]!=null ? `[[${map[+k]}]]` : (r.ingredients[+k]||{}).name||'') : x.text.trim();
+    return st; });
+  rec.edited=true;
+  const keep=steps.map(x=>x.old);
+  if (!(await updateSaved(id, rec))) return;
+  try{ const m=await IDB.get(id); if (m && m.thumbs) await IDB.put(id, {...m, thumbs:keep.map(k=>k>=0?m.thumbs[k]||null:null)}); }catch(_){}
+  ED=null; $('#layer').innerHTML=''; stopAllTimers(); clearMedia();
+  const n=normalize(JSON.parse(JSON.stringify(rec))); openRecipe(n, id); restoreMedia(n, id); toast('수정한 내용을 저장했어요');
+}
+
+/* ---------- 평가 모드: 링크 여러 개를 한꺼번에 분석하고 맞았는지(✓/✗) 표시해 요약을 복사 ---------- */
+const EV_MAX=20;
+S.ev=LS.get('rc_eval',null); if (S.ev) S.ev.items.forEach(x=>{ if (x.status==='run') x.status='wait'; });
+let evStop=false, evRunning=false;
+function evSave(){ if (S.ev && !LS.set('rc_eval', S.ev)){ const lite={...S.ev, items:S.ev.items.map(x=>({...x, recipes:null}))}; LS.set('rc_eval', lite); } }
+function evDraw(){ if (S.tab==='eval' && !S.recipe && !S.cooking && !$('#layer').innerHTML.trim()){ const y=window.scrollY; render(); window.scrollTo(0,y); } }
+function viewEval(){
+  const e=S.ev;
+  const head=`<div class="feedhd"><h2>평가 모드</h2><button class="btn ghost sm" id="evBack">닫기</button></div>`;
+  if (!e) return head+`<p class="muted" style="margin-top:8px">릴스 링크를 한 줄에 하나씩, 최대 ${EV_MAX}개 넣으면 차례로 분석해요. 결과마다 맞았는지(✓) 틀렸는지(✗) 고르고, 요약을 복사해 기록하세요.</p>
+    <textarea id="evIn" style="min-height:200px;margin-top:14px" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..."></textarea>
+    <label class="chk"><input type="checkbox" id="evFresh"> 저장된 분석을 쓰지 않고 새로 분석</label>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">새로 분석한 릴스는 하루 분석 횟수를 써요(테스터 계정은 제한 없음). 평가 기록은 이 폰에만 저장돼요.</p>
+    <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
+  const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
+  const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
+  return head+`<div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
+    <div class="row" style="margin-top:12px;gap:8px">${evRunning?'<button class="btn ghost" style="flex:1" id="evStop">멈추기</button>':it.some(x=>x.status==='wait')?'<button class="btn pri" style="flex:1" id="evRun">이어서 분석</button>':''}
+      <button class="btn sec" style="flex:1" id="evCopy">결과 요약 복사</button>${evRunning?'':'<button class="btn ghost" style="flex:1" id="evNew">새 평가</button>'}</div>
+    <div class="evlist">${it.map((x,i)=>`<div class="evi ${x.mark||''}">
+      <div class="evh"><span class="no">${i+1}</span><span class="cd">${esc(reelCode(x.link)||x.link)}</span><span class="chip ${x.status==='fail'?'warn':''}">${st[x.status]||''}${x.cached?', 저장된 분석':''}</span></div>
+      ${x.status==='ok'?`<div class="evt">${esc(x.titles.join(' / '))}</div><div class="muted" style="font-size:.8rem">재료 ${x.nIng} · 단계 ${x.nStep}${x.mode?` · ${esc(x.mode)}`:''}${x.sec?` · ${x.sec}초`:''}</div>
+        <div class="row evb"><button data-evv="${i}" class="btn ghost sm">보기</button><button data-evm="${i}:ok" class="mk ${x.mark==='ok'?'on':''}" aria-pressed="${x.mark==='ok'}">✓ 맞음</button><button data-evm="${i}:ng" class="mk ng ${x.mark==='ng'?'on':''}" aria-pressed="${x.mark==='ng'}">✗ 틀림</button></div>
+        ${x.mark==='ng'?`<input type="text" data-evn="${i}" maxlength="80" value="${esc(x.memo||'')}" placeholder="무엇이 틀렸나요 (선택)">`:''}`
+      : x.status==='fail'?`<div class="muted" style="font-size:.84rem">${esc(x.err||'')}</div>`:''}
+    </div>`).join('')}</div>`;
+}
+function bindEval(){
+  $('#evBack').onclick=()=>{ S.tab='import'; render(); window.scrollTo(0,0); };
+  const go=$('#evGo'); if (go) go.onclick=()=>{
+    const links=[...new Set(($('#evIn').value.match(/https?:\/\/\S+/g)||[]).map(x=>x.replace(/[),.]+$/,'')))].filter(x=>reelCode(x));
+    if (!links.length){ toast('인스타 릴스 링크를 넣어 주세요'); return; }
+    if (links.length>EV_MAX) toast(`앞의 ${EV_MAX}개만 분석해요`);
+    S.ev={at:Date.now(), fresh:$('#evFresh').checked, items:links.slice(0,EV_MAX).map(link=>({link, status:'wait', mark:'', memo:''}))}; evSave(); runEval(); };
+  const rn=$('#evRun'); if (rn) rn.onclick=runEval;
+  const sp=$('#evStop'); if (sp) sp.onclick=()=>{ evStop=true; toast('지금 분석 중인 것까지만 하고 멈춰요'); };
+  const nw=$('#evNew'); if (nw) nw.onclick=()=>confirmBox('평가 기록을 지우고 새로 시작할까요?', ()=>{ S.ev=null; LS.set('rc_eval',null); render(); }, '새로 시작');
+  const cp=$('#evCopy'); if (cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(evSummary()); toast('평가 결과를 복사했어요'); }catch(e){ toast('복사하지 못했어요'); } };
+  document.querySelectorAll('[data-evm]').forEach(b=>b.onclick=()=>{ const [i,m]=b.dataset.evm.split(':'), x=S.ev.items[+i]; x.mark=x.mark===m?'':m; evSave(); evDraw(); });
+  document.querySelectorAll('[data-evn]').forEach(n=>n.onchange=()=>{ S.ev.items[+n.dataset.evn].memo=n.value.trim(); evSave(); });
+  document.querySelectorAll('[data-evv]').forEach(b=>b.onclick=()=>{ const x=S.ev.items[+b.dataset.evv];
+    if (!x.recipes){ toast('이 결과는 내용을 저장하지 못했어요'); return; }
+    const set=x.recipes.map(r=>normalize(JSON.parse(JSON.stringify(r)))); S.replaceId=null; S.setMedia=null; openRecipe(set[0], null, set); prepareMedia(set[0]); });
+}
+async function runEval(){
+  if (evRunning || !S.ev) return; evRunning=true; evStop=false; evDraw();
+  for (const x of S.ev.items){
+    if (evStop || !S.ev || !S.ev.items.includes(x)) break;
+    if (x.status!=='wait') continue;
+    x.status='run'; evDraw(); const t0=Date.now();
+    try{
+      const d=await streamAnalyze({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ()=>{});
+      x.sec=Math.round((Date.now()-t0)/1000);
+      if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=d.error==='daily_limit'?'오늘 분석 횟수를 다 썼어요':(ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · '));
+        if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; evStop=true; toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); } }
+      else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
+        if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
+        else { const src=d.source||{}, ev=res.evidence||{};
+          const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
+          Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
+            recipes:list.map(r=>({...r, source:base}))}); } }
+    }catch(e){ x.status='fail'; x.err='인터넷 연결이 끊겼어요'; }
+    evSave(); evDraw();
+  }
+  evRunning=false; evSave(); evDraw();
+}
+function evSummary(){
+  const it=S.ev.items, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length, marked=ok+ng;
+  const line=(x,i)=>`${i+1}. ${x.link}${x.status==='ok'?` — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초)`:x.status==='fail'?` — 실패: ${x.err}`:' — 분석 안 함'}${x.memo?` / 메모: ${x.memo}`:''}`;
+  const part=(t,f)=>{ const l=it.map((x,i)=>f(x)?line(x,i):null).filter(Boolean); return l.length?`\n[${t} ${l.length}]\n${l.join('\n')}`:''; };
+  return `[릴쿡 평가 결과] ${new Date(S.ev.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} · ${VERSION}${S.ev.fresh?' · 새로 분석':''}
+분석 ${it.length}개: 성공 ${it.filter(x=>x.status==='ok').length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}
+평가: ✓ ${ok} · ✗ ${ng} · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}${marked?` (맞은 비율 ${Math.round(ok/marked*100)}%)`:''}`
+    + part('✗ 틀림', x=>x.mark==='ng') + part('실패', x=>x.status==='fail') + part('미평가', x=>x.status==='ok'&&!x.mark) + part('✓ 맞음', x=>x.mark==='ok') + part('분석 안 함', x=>x.status==='wait'||x.status==='run');
 }
 
 /* ---------- 단계별 장면 (영상 · 사진) ---------- */
@@ -1252,6 +1441,10 @@ function closeCook(){ if(playing){ const v=playing.querySelector('video'); if(v)
 async function saveRecipe(){
   if (S.recipeSavedId){ toast('이미 저장된 레시피예요'); return; }
   const rec=S.recipe; let id;
+  const old=S.replaceId && S.my.find(x=>x.id===S.replaceId);
+  if (old){ id=old.id; if (old.recipe && old.recipe.cover && !rec.cover) rec.cover=old.recipe.cover;
+    if (!(await updateSaved(id, rec))) return;
+    S.replaceId=null; S.recipeSavedId=id; if(S.recipeSet) S.setSaved[S.setIdx]=id; toast('저장한 레시피를 새 결과로 바꿨어요'); render(); persistMedia(id); return; }
   if (sb && S.user){
     const {data,error}=await sb.from('recipes').insert({recipe:rec, reel_code:reelCode(rec.source&&rec.source.link)}).select('id').single();
     if (error){ toast('저장하지 못했어요: '+error.message); return; }
@@ -1264,6 +1457,13 @@ async function saveRecipe(){
   S.my.unshift({id, recipe:rec, savedAt:Date.now()});
   S.recipeSavedId=id; if(S.recipeSet) S.setSaved[S.setIdx]=id; toast(sb&&S.user?'저장했어요. 계정에 동기화돼요':'내 레시피에 저장했어요'); render();
   persistMedia(id);
+}
+// 저장한 레시피 내용 바꾸기 (계정 또는 이 폰)
+async function updateSaved(id, rec){
+  if (sb && S.user){ const {error}=await sb.from('recipes').update({recipe:rec}).eq('id',id); if (error){ toast('저장하지 못했어요: '+error.message); return false; } }
+  else { const l=LS.get('rc_recipes',[]); const x=l.find(y=>y.id===id); if (x){ x.recipe=rec; if (!LS.set('rc_recipes',l)){ toast('저장 공간이 부족해요'); return false; } } }
+  const d=S.my.find(x=>x.id===id); if (d) d.recipe=JSON.parse(JSON.stringify(rec));
+  return true;
 }
 function reelCode(link){ const m=String(link||'').match(/instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:reel|reels|p|tv)\/([A-Za-z0-9_-]{5,})/i); return m?m[1]:null; }
 function viewBox(){
@@ -1571,6 +1771,7 @@ $('#setBtn').onclick=()=>{
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
     <label class="fl">AI 사용량</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>
+    <label class="fl">평가 모드</label><button class="btn ghost sm" id="evalBtn">릴스 여러 개 한꺼번에 분석해 보기</button>
     <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
     <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ S.fs=b.dataset.fs; LS.set('rc_fs',S.fs); applyFs(); document.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
@@ -1578,6 +1779,7 @@ $('#setBtn').onclick=()=>{
   document.querySelectorAll('.legal [data-doc]').forEach(b=>b.onclick=()=>showDoc(b.dataset.doc));
   $('#wd').onclick=withdraw;
   $('#usageBtn').onclick=showUsage;
+  $('#evalBtn').onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -1587,8 +1789,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-14';
-const TERMS_CHANGES='무료 서비스를 안정적으로 운영하기 위해 하루 분석 횟수(10회) 제한과 그에 필요한 기록 항목을 더했어요.';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-21';
+const TERMS_CHANGES='저장한 레시피 직접 수정, "결과가 이상해요"(다시 분석), 평가 모드를 더하고 그 내용을 약관에 반영했어요(11월 21일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -1619,7 +1821,7 @@ function showGate(){
       ${item('terms','이용약관','terms')}
       ${item('privacy','개인정보 수집·이용','privacy',`<table class="sumtbl"><tr><th>항목</th><th>목적</th><th>보관</th></tr>
         <tr><td>구글 계정 이메일·이름, 닉네임, 프로필 사진</td><td>로그인, 피드 작성자 표시</td><td>탈퇴할 때까지</td></tr>
-        <tr><td>게시물, 저장한 레시피</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
+        <tr><td>게시물, 저장한 레시피(직접 고친 내용 포함)</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
         <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr>
         <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr></table>
         <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
