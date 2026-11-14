@@ -41,3 +41,8 @@
 - 공개 게시물에는 원작자의 캡션·댓글·장면 사진을 싣지 않는다(서버 `api/post.js`에서도 제거).
 - 버전을 올릴 때 `index.html`의 `VERSION`과 `sw.js`의 `VERSION`을 함께 올린다.
 - DB 구조가 바뀌면 `supabase/update-vX.Y.sql`을 만들고 `schema.sql`에도 반영한다.
+
+## 개발 도구 (Claude Code용, 앱에는 영향 없음)
+- `.mcp.json`: Serena(코드 기호 검색·수정), Headroom(긴 출력 압축) MCP 서버. `uvx`로 자동 실행된다.
+- `.claude/settings.json`: Ponytail 플러그인(필요 이상으로 코드를 늘리지 않게 하는 규칙).
+- `.serena/project.yml`: Serena 프로젝트 설정(언어: typescript, JS 포함).
