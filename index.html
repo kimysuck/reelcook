@@ -471,7 +471,9 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 .evsum{margin-top:10px;font-size:1rem}.evsum .ok{color:var(--herb);font-weight:700}.evsum .ng{color:var(--hot);font-weight:700}
 .evlist{margin-top:14px}.evi{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px}.evi.ok{border-color:var(--herb)}.evi.ng{border-color:var(--hot)}
 .evh{display:flex;gap:8px;align-items:center;font-size:.84rem}.evh .no{font-weight:700}.evh .cd{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
-.evt{font-weight:700;margin-top:6px}.evb{gap:6px;margin-top:10px}.evb .mk{flex:1;min-height:42px;border:1.5px solid var(--line);border-radius:10px;font-weight:700}
+.evt{font-weight:700;margin-top:6px}.evd{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--line2);font-size:.8rem;color:var(--ink2);line-height:1.55}.evd .bad{color:var(--hot);font-weight:700}
+.evwhy{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.evwhy button{border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.84rem}.evwhy button.on{background:var(--hot);border-color:var(--hot);color:#fff;font-weight:700}
+.evhow{margin-top:8px;padding-left:1.2em;font-size:.86rem}#evAgain{display:inline-flex;gap:6px;align-items:center}.evb{gap:6px;margin-top:10px}.evb .mk{flex:1;min-height:42px;border:1.5px solid var(--line);border-radius:10px;font-weight:700}
 .evb .mk.on{background:var(--herb);border-color:var(--herb);color:#fff}.evb .mk.ng.on{background:var(--hot);border-color:var(--hot)}.evi input{margin-top:8px}
 </style>
 </head>
@@ -831,6 +833,7 @@ async function analyze(opts={}){
       if (data.error==='quota_day') throw new Error(`${ERR.quota_day} ${data.resetAt?kst(data.resetAt)+'에 다시 채워져요.':''} 설정 > AI 사용량에서 확인할 수 있어요.`);
       throw new Error(ERR[data.error] || `분석 서버 오류 (${data.error||data.status}${data.message?': '+data.message:''})`);
     }
+    if (data.tester!=null) S.tester=!!data.tester;
     const res=parseJSON(data.text), list=(Array.isArray(res.recipes)?res.recipes:[res]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
     if (!list.length){ S.errCode=['no_recipe', src0(data), ...(data.notes||[])].filter(Boolean).join(' · '); }
     if (!list.length) throw new Error(res.is_food===false ? `요리를 만드는 릴스가 아닌 것 같아요${res.reason?` (${res.reason})`:''}. 요리 과정이 나오는 릴스를 공유해 주세요.` : '이 릴스에서 레시피를 찾지 못했어요. 캡션을 직접 붙여넣거나 다른 릴스로 시도해 주세요.');
@@ -869,7 +872,7 @@ function render(){
   if (S.tab==='import'){ app.innerHTML=viewImport(); bindImport(); }
   if (S.tab==='box'){ app.innerHTML=viewBox(); bindBox(); }
   if (S.tab==='feed'){ app.innerHTML=viewFeed(); bindFeed(); }
-  if (S.tab==='eval'){ app.innerHTML=viewEval(); bindEval(); }
+  if (S.tab==='eval'){ if (!S.tester){ S.tab='import'; return render(); } app.innerHTML=viewEval(); bindEval(); }
 }
 let installEvt=null;
 window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); installEvt=e; if(S.tab==='import'&&!S.recipe&&!S.busy) render(); });
@@ -1178,30 +1181,67 @@ async function saveEdit(){
   const n=normalize(JSON.parse(JSON.stringify(rec))); openRecipe(n, id); restoreMedia(n, id); toast('수정한 내용을 저장했어요');
 }
 
-/* ---------- 평가 모드: 링크 여러 개를 한꺼번에 분석하고 맞았는지(✓/✗) 표시해 요약을 복사 ---------- */
+/* ---------- 평가 모드 (테스터 전용): 분석 품질을 고치기 위한 진단 도구 ----------
+   릴스 여러 개를 평소와 똑같이 분석 → 릴스마다 "어떤 자료가 있었고 AI가 무엇을 근거로 썼는지"를 함께 기록 →
+   영석님이 ✓/✗와 틀린 이유를 고름 → 요약(유형별·근거별 집계 포함)을 복사해 개발에 넘긴다. */
 const EV_MAX=20;
+const EV_WHY=[['amount','분량'],['missing_ing','재료 빠짐·틀림'],['steps','순서·방법'],['wrong_dish','다른 요리'],['missing_recipe','레시피 누락'],['other','기타']];
+const EV_TYPE={caption:'캡션·작성자 댓글에 레시피', subs:'자막·음성에 레시피', video:'영상 장면만'};
+const EV_SRC={caption:'캡션', owner_comment:'작성자 댓글', viewer_comment:'시청자 댓글', onscreen_text:'자막', speech:'음성', visual:'화면 추정'};
 S.ev=LS.get('rc_eval',null); if (S.ev) S.ev.items.forEach(x=>{ if (x.status==='run') x.status='wait'; });
 let evStop=false, evRunning=false;
 function evSave(){ if (S.ev && !LS.set('rc_eval', S.ev)){ const lite={...S.ev, items:S.ev.items.map(x=>({...x, recipes:null}))}; LS.set('rc_eval', lite); } }
 function evDraw(){ if (S.tab==='eval' && !S.recipe && !S.cooking && !$('#layer').innerHTML.trim()){ const y=window.scrollY; render(); window.scrollTo(0,y); } }
+// 자동 검사(참고용): 캡션·작성자 댓글에 재료 이름 바로 뒤에 숫자가 적혀 있으면 AI가 정한 분량과 같은지 본다
+const KNUM={'반':0.5,'½':0.5,'¼':0.25,'한':1,'두':2,'세':3,'네':4};
+function capCheck(text, list){
+  const t=String(text||''); if (!t.trim()) return null; let checked=0; const bad=[];
+  for (const i of list){ const n=String(i.name||'').trim(); if (n.length<2 || i.orig_qty==null) continue;
+    let m=null; for (let k=t.indexOf(n); k>=0 && !m; k=t.indexOf(n,k+1)){ if (k>0 && /[가-힣]/.test(t[k-1])) continue;   // "대패숙주"의 "숙주"는 건너뜀
+      m=t.slice(k+n.length, k+n.length+8).match(/^\s*[:：-]?\s*(\d+(?:\.\d+)?(?:\/\d+)?|반|½|¼|한|두|세|네)/); }   // 이름 바로 뒤의 분량만
+    if (!m) continue;
+    const v=KNUM[m[1]] ?? (m[1].includes('/') ? (+m[1].split('/')[0])/(+m[1].split('/')[1]||1) : +m[1]);
+    checked++; if (Math.abs(v-i.orig_qty)>1e-6) bad.push(`${n}(캡션 ${m[1]}, AI ${roundAmt(i.orig_qty)})`); }
+  return checked ? {checked, bad} : null;
+}
+// 분석 응답 → 진단 정보
+function evInfo(d, res, list){
+  const src=d.source||{}, ev=res.evidence||{}, all=list.flatMap(r=>r.ingredients||[]);
+  const used=[...new Set(list.flatMap(r=>Array.isArray(r.sources)?r.sources:[]))];
+  const capState=src.gotCaption ? (ev.caption||'있음') : '없음', owner=src.ownerComments||0, viewer=Math.max(0,(src.gotComments||0)-owner);
+  const subs=!!(ev.onscreen_text||'').trim(), speech=!!(ev.speech||'').trim();
+  const type = capState==='레시피' || used.includes('caption') || used.includes('owner_comment') ? 'caption' : (subs||speech||used.includes('onscreen_text')||used.includes('speech')) ? 'subs' : 'video';
+  const ownerText=(src.comments||[]).filter(c=>/^작성자: /.test(c)).join('\n');
+  return { type, used, capState, owner, viewer, subs, speech, video:!!src.gotVideo,
+    est:all.filter(i=>i.estimated).length, nAll:all.length, conf:(list[0]||{}).confidence||'',
+    evSpeech:String(ev.speech||'').slice(0,150), evSubs:String(ev.onscreen_text||'').slice(0,150), cmUsed:(ev.comments_used||[]).slice(0,6),
+    auto:capCheck([src.caption||'', ownerText].join('\n'), list[0]?list[0].ingredients:[]) };
+}
+const evHave=x=>[`캡션(${x.capState})`, x.owner?`작성자 댓글 ${x.owner}`:'', x.viewer?`시청자 댓글 ${x.viewer}`:'', x.subs?'자막':'', x.speech?'음성':'', x.video?'영상':''].filter(Boolean).join('·');
+const evUsed=x=>(x.used||[]).map(s=>EV_SRC[s]||s).join('·')||'-';
 function viewEval(){
   const e=S.ev;
   const head=`<div class="feedhd"><h2>평가 모드</h2><button class="btn ghost sm" id="evBack">닫기</button></div>`;
-  if (!e) return head+`<p class="muted" style="margin-top:8px">릴스 링크를 한 줄에 하나씩, 최대 ${EV_MAX}개 넣으면 차례로 분석해요. 결과마다 맞았는지(✓) 틀렸는지(✗) 고르고, 요약을 복사해 기록하세요.</p>
+  if (!e) return head+`<p class="muted" style="margin-top:8px">분석 품질을 고치기 위한 테스터 전용 도구예요. 릴스 링크를 한 줄에 하나씩, 최대 ${EV_MAX}개 넣으면 차례로 분석하고, 릴스마다 어떤 자료가 있었고 AI가 무엇을 근거로 썼는지 함께 기록해요.</p>
+    <ol class="muted evhow"><li>결과를 보고 ✓ 맞음 / ✗ 틀림을 골라요. 틀렸으면 이유도 골라요.</li><li>"결과 요약 복사"를 눌러 Claude에게 붙여 넣어요.</li><li>고친 뒤 같은 링크로 다시 돌려 맞은 비율을 비교해요.</li></ol>
     <textarea id="evIn" style="min-height:200px;margin-top:14px" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..."></textarea>
-    <label class="chk"><input type="checkbox" id="evFresh"> 저장된 분석을 쓰지 않고 새로 분석</label>
-    <p class="muted" style="font-size:.8rem;margin-top:8px">새로 분석한 릴스는 하루 분석 횟수를 써요(테스터 계정은 제한 없음). 평가 기록은 이 폰에만 저장돼요.</p>
+    <label class="chk"><input type="checkbox" id="evFresh" checked> 저장된 분석을 쓰지 않고 새로 분석 (고친 뒤 비교할 때 필요)</label>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">평가 기록은 이 폰에만 저장돼요.</p>
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
   return head+`<div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
     <div class="row" style="margin-top:12px;gap:8px">${evRunning?'<button class="btn ghost" style="flex:1" id="evStop">멈추기</button>':it.some(x=>x.status==='wait')?'<button class="btn pri" style="flex:1" id="evRun">이어서 분석</button>':''}
       <button class="btn sec" style="flex:1" id="evCopy">결과 요약 복사</button>${evRunning?'':'<button class="btn ghost" style="flex:1" id="evNew">새 평가</button>'}</div>
+    ${evRunning?'':`<button class="btn link" id="evAgain" style="margin-top:8px">${IC.refresh}같은 링크로 다시 분석 (고친 뒤 비교)</button>`}
     <div class="evlist">${it.map((x,i)=>`<div class="evi ${x.mark||''}">
       <div class="evh"><span class="no">${i+1}</span><span class="cd">${esc(reelCode(x.link)||x.link)}</span><span class="chip ${x.status==='fail'?'warn':''}">${st[x.status]||''}${x.cached?', 저장된 분석':''}</span></div>
       ${x.status==='ok'?`<div class="evt">${esc(x.titles.join(' / '))}</div><div class="muted" style="font-size:.8rem">재료 ${x.nIng} · 단계 ${x.nStep}${x.mode?` · ${esc(x.mode)}`:''}${x.sec?` · ${x.sec}초`:''}</div>
+        ${x.info?`<div class="evd"><div><b>${esc(EV_TYPE[x.info.type])}</b></div><div>있던 자료: ${esc(evHave(x.info))}</div><div>AI 근거: ${esc(evUsed(x.info))}${x.info.nAll?` · 추정 재료 ${x.info.est}/${x.info.nAll}`:''}</div>
+          ${x.info.auto?`<div class="${x.info.auto.bad.length?'bad':''}">자동 검사: 캡션 분량 ${x.info.auto.checked-x.info.auto.bad.length}/${x.info.auto.checked} 일치${x.info.auto.bad.length?` · 다름: ${esc(x.info.auto.bad.join(', '))}`:''}</div>`:''}</div>`:''}
         <div class="row evb"><button data-evv="${i}" class="btn ghost sm">보기</button><button data-evm="${i}:ok" class="mk ${x.mark==='ok'?'on':''}" aria-pressed="${x.mark==='ok'}">✓ 맞음</button><button data-evm="${i}:ng" class="mk ng ${x.mark==='ng'?'on':''}" aria-pressed="${x.mark==='ng'}">✗ 틀림</button></div>
-        ${x.mark==='ng'?`<input type="text" data-evn="${i}" maxlength="80" value="${esc(x.memo||'')}" placeholder="무엇이 틀렸나요 (선택)">`:''}`
+        ${x.mark==='ng'?`<div class="evwhy">${EV_WHY.map(([v,l])=>`<button data-evw="${i}:${v}" class="${(x.why||[]).includes(v)?'on':''}" aria-pressed="${(x.why||[]).includes(v)}">${l}</button>`).join('')}</div>
+          <input type="text" data-evn="${i}" maxlength="80" value="${esc(x.memo||'')}" placeholder="무엇이 틀렸나요 (선택, 예: 간장 2숟갈인데 1숟갈로 나옴)">`:''}`
       : x.status==='fail'?`<div class="muted" style="font-size:.84rem">${esc(x.err||'')}</div>`:''}
     </div>`).join('')}</div>`;
 }
@@ -1211,12 +1251,15 @@ function bindEval(){
     const links=[...new Set(($('#evIn').value.match(/https?:\/\/\S+/g)||[]).map(x=>x.replace(/[),.]+$/,'')))].filter(x=>reelCode(x));
     if (!links.length){ toast('인스타 릴스 링크를 넣어 주세요'); return; }
     if (links.length>EV_MAX) toast(`앞의 ${EV_MAX}개만 분석해요`);
-    S.ev={at:Date.now(), fresh:$('#evFresh').checked, items:links.slice(0,EV_MAX).map(link=>({link, status:'wait', mark:'', memo:''}))}; evSave(); runEval(); };
+    S.ev={at:Date.now(), fresh:$('#evFresh').checked, round:1, items:links.slice(0,EV_MAX).map(link=>({link, status:'wait', mark:'', why:[], memo:''}))}; evSave(); runEval(); };
   const rn=$('#evRun'); if (rn) rn.onclick=runEval;
   const sp=$('#evStop'); if (sp) sp.onclick=()=>{ evStop=true; toast('지금 분석 중인 것까지만 하고 멈춰요'); };
   const nw=$('#evNew'); if (nw) nw.onclick=()=>confirmBox('평가 기록을 지우고 새로 시작할까요?', ()=>{ S.ev=null; LS.set('rc_eval',null); render(); }, '새로 시작');
-  const cp=$('#evCopy'); if (cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(evSummary()); toast('평가 결과를 복사했어요'); }catch(e){ toast('복사하지 못했어요'); } };
-  document.querySelectorAll('[data-evm]').forEach(b=>b.onclick=()=>{ const [i,m]=b.dataset.evm.split(':'), x=S.ev.items[+i]; x.mark=x.mark===m?'':m; evSave(); evDraw(); });
+  const ag=$('#evAgain'); if (ag) ag.onclick=()=>confirmBox('같은 링크를 새로 분석할까요? 이번 결과는 요약에 "지난번"으로 남아요.', ()=>{
+    const prev=evStats(); S.ev={at:Date.now(), fresh:true, round:(S.ev.round||1)+1, prev, items:S.ev.items.map(x=>({link:x.link, status:'wait', mark:'', why:[], memo:'', prevMark:x.mark||''}))}; evSave(); runEval(); }, '다시 분석');
+  const cp=$('#evCopy'); if (cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(evSummary()); toast('평가 결과를 복사했어요. Claude에게 붙여 넣어 주세요'); }catch(e){ toast('복사하지 못했어요'); } };
+  document.querySelectorAll('[data-evm]').forEach(b=>b.onclick=()=>{ const [i,m]=b.dataset.evm.split(':'), x=S.ev.items[+i]; x.mark=x.mark===m?'':m; if (x.mark!=='ng'){ x.why=[]; } evSave(); evDraw(); });
+  document.querySelectorAll('[data-evw]').forEach(b=>b.onclick=()=>{ const [i,w]=b.dataset.evw.split(':'), x=S.ev.items[+i]; x.why=x.why||[]; x.why=x.why.includes(w)?x.why.filter(y=>y!==w):[...x.why,w]; evSave(); evDraw(); });
   document.querySelectorAll('[data-evn]').forEach(n=>n.onchange=()=>{ S.ev.items[+n.dataset.evn].memo=n.value.trim(); evSave(); });
   document.querySelectorAll('[data-evv]').forEach(b=>b.onclick=()=>{ const x=S.ev.items[+b.dataset.evv];
     if (!x.recipes){ toast('이 결과는 내용을 저장하지 못했어요'); return; }
@@ -1231,27 +1274,45 @@ async function runEval(){
     try{
       const d=await streamAnalyze({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ()=>{});
       x.sec=Math.round((Date.now()-t0)/1000);
-      if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=d.error==='daily_limit'?'오늘 분석 횟수를 다 썼어요':(ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · '));
+      if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · ');
         if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; evStop=true; toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); } }
       else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
         if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
         else { const src=d.source||{}, ev=res.evidence||{};
           const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
           Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
-            recipes:list.map(r=>({...r, source:base}))}); } }
+            info:evInfo(d,res,list), recipes:list.map(r=>({...r, source:base}))}); } }
     }catch(e){ x.status='fail'; x.err='인터넷 연결이 끊겼어요'; }
     evSave(); evDraw();
   }
   evRunning=false; evSave(); evDraw();
 }
+function evStats(){ const it=S.ev.items, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length; return {ok, ng, rate: ok+ng ? Math.round(ok/(ok+ng)*100) : null}; }
 function evSummary(){
-  const it=S.ev.items, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length, marked=ok+ng;
-  const line=(x,i)=>`${i+1}. ${x.link}${x.status==='ok'?` — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초)`:x.status==='fail'?` — 실패: ${x.err}`:' — 분석 안 함'}${x.memo?` / 메모: ${x.memo}`:''}`;
-  const part=(t,f)=>{ const l=it.map((x,i)=>f(x)?line(x,i):null).filter(Boolean); return l.length?`\n[${t} ${l.length}]\n${l.join('\n')}`:''; };
-  return `[릴쿡 평가 결과] ${new Date(S.ev.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} · ${VERSION}${S.ev.fresh?' · 새로 분석':''}
-분석 ${it.length}개: 성공 ${it.filter(x=>x.status==='ok').length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}
-평가: ✓ ${ok} · ✗ ${ng} · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}${marked?` (맞은 비율 ${Math.round(ok/marked*100)}%)`:''}`
-    + part('✗ 틀림', x=>x.mark==='ng') + part('실패', x=>x.status==='fail') + part('미평가', x=>x.status==='ok'&&!x.mark) + part('✓ 맞음', x=>x.mark==='ok') + part('분석 안 함', x=>x.status==='wait'||x.status==='run');
+  const it=S.ev.items, s=evStats(), done=it.filter(x=>x.status==='ok');
+  const tally=(xs)=>`${xs.length}개 → ✓${xs.filter(x=>x.mark==='ok').length} ✗${xs.filter(x=>x.mark==='ng').length}${xs.some(x=>!x.mark)?` 미평가${xs.filter(x=>!x.mark).length}`:''}`;
+  const out=[`[릴쿡 평가 결과] ${new Date(S.ev.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} · ${VERSION} · ${S.ev.round>1?`${S.ev.round}회차`:'1회차'}${S.ev.fresh?' · 새로 분석':' · 저장된 분석 포함'}`,
+    `분석 ${it.length}개: 성공 ${done.length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}`,
+    `평가: ✓ ${s.ok} · ✗ ${s.ng} · 미평가 ${done.filter(x=>!x.mark).length}${s.rate!=null?` (맞은 비율 ${s.rate}%)`:''}${S.ev.prev&&S.ev.prev.rate!=null?` · 지난번 ${S.ev.prev.rate}%`:''}`];
+  const withInfo=done.filter(x=>x.info);
+  if (withInfo.length){
+    out.push('', '[릴스 유형별]'); for (const t of Object.keys(EV_TYPE)){ const xs=withInfo.filter(x=>x.info.type===t); if (xs.length) out.push(`- ${EV_TYPE[t]}: ${tally(xs)}`); }
+    out.push('', '[AI가 쓴 근거별]'); for (const k of Object.keys(EV_SRC)){ const xs=withInfo.filter(x=>x.info.used.includes(k)); if (xs.length) out.push(`- ${EV_SRC[k]}: ${tally(xs)}`); }
+    const hiEst=withInfo.filter(x=>x.info.nAll && x.info.est/x.info.nAll>=0.5); if (hiEst.length) out.push(`- 추정 재료가 절반 이상: ${tally(hiEst)}`);
+    const mode=m=>withInfo.filter(x=>x.mode===m); for (const m of ['single','two_stage']) if (mode(m).length) out.push(`- 분석 방식 ${m}: ${tally(mode(m))}`);
+    const autoBad=withInfo.filter(x=>x.info.auto&&x.info.auto.bad.length); if (autoBad.length) out.push(`- 자동 검사에서 캡션과 분량이 다름: ${tally(autoBad)}`);
+  }
+  const whyN=EV_WHY.map(([v,l])=>[l, it.filter(x=>x.mark==='ng'&&(x.why||[]).includes(v)).length]).filter(([,n])=>n);
+  if (whyN.length) out.push('', `[틀린 이유] ${whyN.map(([l,n])=>`${l} ${n}`).join(' · ')}`);
+  const flip=it.filter(x=>x.prevMark && x.mark && x.prevMark!==x.mark); if (flip.length) out.push(`[지난번과 달라짐] ${flip.map(x=>`${it.indexOf(x)+1}번 ${x.prevMark==='ok'?'✓→✗':'✗→✓'}`).join(', ')}`);
+  const line=(x,i,deep)=>{ if (x.status!=='ok') return `${i+1}. ${x.link} — ${x.status==='fail'?'실패: '+x.err:'분석 안 함'}`;
+    const f=x.info, l=[`${i+1}. ${x.link} — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초)${x.mark==='ng'?` ✗ ${(x.why||[]).map(w=>(EV_WHY.find(y=>y[0]===w)||[,w])[1]).join(', ')||'이유 없음'}`:x.mark==='ok'?' ✓':''}${x.memo?` / 메모: ${x.memo}`:''}`];
+    if (f){ l.push(`   자료: ${evHave(f)} | 근거: ${evUsed(f)} | 추정 ${f.est}/${f.nAll} | 확신 ${f.conf||'-'}${f.auto?` | 자동검사 ${f.auto.checked-f.auto.bad.length}/${f.auto.checked}${f.auto.bad.length?' 다름: '+f.auto.bad.join(', '):''}`:''}`);
+      if (deep){ if (f.evSubs) l.push(`   AI가 읽은 자막: ${f.evSubs}`); if (f.evSpeech) l.push(`   AI가 들은 음성: ${f.evSpeech}`); if (f.cmUsed.length) l.push(`   쓴 댓글: ${f.cmUsed.join(', ')}`); } }
+    return l.join('\n'); };
+  const part=(t,fn,deep)=>{ const l=it.map((x,i)=>fn(x)?line(x,i,deep):null).filter(Boolean); if (l.length) out.push('', `[${t} ${l.length}]`, ...l); };
+  part('✗ 틀림', x=>x.mark==='ng', true); part('실패', x=>x.status==='fail'); part('미평가', x=>x.status==='ok'&&!x.mark); part('✓ 맞음', x=>x.mark==='ok'); part('분석 안 함', x=>x.status==='wait'||x.status==='run');
+  return out.join('\n');
 }
 
 /* ---------- 단계별 장면 (영상 · 사진) ---------- */
@@ -1522,9 +1583,14 @@ async function onSession(session){
   if (sessionUid===id) return; sessionUid=id; S.user=u;
   if (/[?&]code=/.test(location.search)) history.replaceState(null,'','/');
   renderWho();
+  S.tester=false; if (u) checkTester();
   if (u){ await loadProfile(); renderWho(); syncConsent(); if (S.profile && !S.profile.setup_done) whenConsented(()=>openProfile(true)); await migrateLocal(); await loadMyRecipes(); S.feed=null; }
   else { S.my=LS.get('rc_recipes',[]); S.feed=null; S.profile=null; }
   if (!S.busy && !S.recipe && !S.cooking) render();
+}
+async function checkTester(){
+  try{ const {data}=await sb.auth.getSession(), tok=data.session&&data.session.access_token; if (!tok) return;
+    const r=await fetch('/api/usage',{headers:{...(S.pass?{'x-app-passcode':S.pass}:{}), Authorization:'Bearer '+tok}}); const d=await r.json(); S.tester=!!d.tester; }catch(e){}
 }
 async function loadMyRecipes(){
   S.myLoading=true; if (S.tab==='box' && !S.recipe) render();
@@ -1771,7 +1837,7 @@ $('#setBtn').onclick=()=>{
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
     <label class="fl">AI 사용량</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>
-    <label class="fl">평가 모드</label><button class="btn ghost sm" id="evalBtn">릴스 여러 개 한꺼번에 분석해 보기</button>
+    ${S.tester?`<label class="fl">평가 모드 (테스터 전용)</label><button class="btn ghost sm" id="evalBtn">분석 품질 평가하기</button>`:''}
     <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
     <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
   document.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ S.fs=b.dataset.fs; LS.set('rc_fs',S.fs); applyFs(); document.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
@@ -1779,7 +1845,7 @@ $('#setBtn').onclick=()=>{
   document.querySelectorAll('.legal [data-doc]').forEach(b=>b.onclick=()=>showDoc(b.dataset.doc));
   $('#wd').onclick=withdraw;
   $('#usageBtn').onclick=showUsage;
-  $('#evalBtn').onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
+  const evb=$('#evalBtn'); if (evb) evb.onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -1790,7 +1856,7 @@ $('#setBtn').onclick=()=>{
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
 const TERMS_VERSION='2026-11-21';
-const TERMS_CHANGES='저장한 레시피 직접 수정, "결과가 이상해요"(다시 분석), 평가 모드를 더하고 그 내용을 약관에 반영했어요(11월 21일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_CHANGES='저장한 레시피 직접 수정과 "결과가 이상해요"(다시 분석) 기능을 더하고 그 내용을 약관에 반영했어요(11월 21일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
