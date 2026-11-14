@@ -67,7 +67,8 @@ with sync_playwright() as p:
     setm('mode=caption&email=tester@example.com&script=ok,notfood,ok')
     pg.click('#setBtn'); pg.click('#evalBtn'); pg.wait_for_selector('#evIn')
     pg.fill('#evIn','https://www.instagram.com/reel/EVALA1/\nhttps://www.instagram.com/reel/EVALA2/ 메모\nhttps://www.instagram.com/reel/EVALA3/\nhttps://example.com/x')
-    pg.click('#evGo')
+    pg.click('#evGo'); pg.wait_for_timeout(500)
+    nrun=pg.locator('[data-evrun]').count(); print('동시에 분석 중', nrun, pg.inner_text('[data-evrun]')); assert nrun>=2, 'not parallel'
     done="document.querySelectorAll('.evi').length===3 && ![...document.querySelectorAll('.evi .chip')].some(c=>/대기|분석 중/.test(c.textContent))"
     pg.wait_for_function(done, timeout=60000)
     print('diag', pg.inner_text('.evi .evd').replace('\n',' | '))

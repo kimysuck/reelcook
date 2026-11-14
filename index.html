@@ -866,7 +866,7 @@ function render(){
   playing=null;
   document.body.classList.toggle('detail', !!S.recipe);
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab && !S.recipe));
-  setAwake(S.busy || !!S.recipe || S.cooking);
+  setAwake(S.busy || !!S.recipe || S.cooking || evRunning);
   const app=$('#app');
   if (S.recipe){ app.innerHTML=viewRecipe(); bindRecipe(); return; }
   if (S.tab==='import'){ app.innerHTML=viewImport(); bindImport(); }
@@ -1226,7 +1226,7 @@ function viewEval(){
     <ol class="muted evhow"><li>결과를 보고 ✓ 맞음 / ✗ 틀림을 골라요. 틀렸으면 이유도 골라요.</li><li>"결과 요약 복사"를 눌러 Claude에게 붙여 넣어요.</li><li>고친 뒤 같은 링크로 다시 돌려 맞은 비율을 비교해요.</li></ol>
     <textarea id="evIn" style="min-height:200px;margin-top:14px" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..."></textarea>
     <label class="chk"><input type="checkbox" id="evFresh" checked> 저장된 분석을 쓰지 않고 새로 분석 (고친 뒤 비교할 때 필요)</label>
-    <p class="muted" style="font-size:.8rem;margin-top:8px">평가 기록은 이 폰에만 저장돼요.</p>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">3개씩 동시에 분석해요. 릴스 하나에 보통 30초~2분 걸리고, 분석하는 동안 화면은 켜진 채로 있어요. 다른 앱으로 나가면 멈출 수 있어요. 평가 기록은 이 폰에만 저장돼요.</p>
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
@@ -1235,7 +1235,7 @@ function viewEval(){
       <button class="btn sec" style="flex:1" id="evCopy">결과 요약 복사</button>${evRunning?'':'<button class="btn ghost" style="flex:1" id="evNew">새 평가</button>'}</div>
     ${evRunning?'':`<button class="btn link" id="evAgain" style="margin-top:8px">${IC.refresh}같은 링크로 다시 분석 (고친 뒤 비교)</button>`}
     <div class="evlist">${it.map((x,i)=>`<div class="evi ${x.mark||''}">
-      <div class="evh"><span class="no">${i+1}</span><span class="cd">${esc(reelCode(x.link)||x.link)}</span><span class="chip ${x.status==='fail'?'warn':''}">${st[x.status]||''}${x.cached?', 저장된 분석':''}</span></div>
+      <div class="evh"><span class="no">${i+1}</span><span class="cd">${esc(reelCode(x.link)||x.link)}</span><span class="chip ${x.status==='fail'?'warn':''}" ${x.status==='run'?`data-evrun="${i}"`:''}>${x.status==='run'&&x.t0?`${EV_STAGE[x.stage]||'분석 중'} · ${Math.round((Date.now()-x.t0)/1000)}초`:st[x.status]||''}${x.cached?', 저장된 분석':''}</span></div>
       ${x.status==='ok'?`<div class="evt">${esc(x.titles.join(' / '))}</div><div class="muted" style="font-size:.8rem">재료 ${x.nIng} · 단계 ${x.nStep}${x.mode?` · ${esc(x.mode)}`:''}${x.sec?` · ${x.sec}초`:''}</div>
         ${x.info?`<div class="evd"><div><b>${esc(EV_TYPE[x.info.type])}</b></div><div>있던 자료: ${esc(evHave(x.info))}</div><div>AI 근거: ${esc(evUsed(x.info))}${x.info.nAll?` · 추정 재료 ${x.info.est}/${x.info.nAll}`:''}</div>
           ${x.info.auto?`<div class="${x.info.auto.bad.length?'bad':''}">자동 검사: 캡션 분량 ${x.info.auto.checked-x.info.auto.bad.length}/${x.info.auto.checked} 일치${x.info.auto.bad.length?` · 다름: ${esc(x.info.auto.bad.join(', '))}`:''}</div>`:''}</div>`:''}
@@ -1265,34 +1265,42 @@ function bindEval(){
     if (!x.recipes){ toast('이 결과는 내용을 저장하지 못했어요'); return; }
     const set=x.recipes.map(r=>normalize(JSON.parse(JSON.stringify(r)))); S.replaceId=null; S.setMedia=null; openRecipe(set[0], null, set); prepareMedia(set[0]); });
 }
+// 3개씩 동시에 분석한다(무료 AI 한도가 차면 서버가 다른 모델로 넘기거나 잠깐 기다린다). 평가 중에는 화면이 꺼지지 않게 한다.
+const EV_PAR=3;
+const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기'};
+let evTick=null;
+function evTickUI(){ document.querySelectorAll('[data-evrun]').forEach(el=>{ const x=S.ev&&S.ev.items[+el.dataset.evrun]; if (x&&x.status==='run'&&x.t0) el.textContent=`${EV_STAGE[x.stage]||'분석 중'} · ${Math.round((Date.now()-x.t0)/1000)}초`; }); }
+async function evOne(x){
+  x.status='run'; x.stage='start'; x.t0=Date.now(); evDraw();
+  try{
+    const d=await streamAnalyze({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ev=>{ if (ev.stage){ x.stage=ev.stage; evTickUI(); } });
+    x.sec=Math.round((Date.now()-x.t0)/1000);
+    if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · ');
+      if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; if (!evStop) toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); evStop=true; } }
+    else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
+      if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
+      else { const src=d.source||{}, ev=res.evidence||{};
+        const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
+        Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
+          info:evInfo(d,res,list), recipes:list.map(r=>({...r, source:base}))}); } }
+  }catch(e){ x.status='wait'; x.err=''; x.stage=''; evStop=true; toast('인터넷 연결이 끊겨서 멈췄어요. "이어서 분석"을 눌러 주세요'); }
+  delete x.t0; evSave(); evDraw();
+}
 async function runEval(){
-  if (evRunning || !S.ev) return; evRunning=true; evStop=false; evDraw();
-  for (const x of S.ev.items){
-    if (evStop || !S.ev || !S.ev.items.includes(x)) break;
-    if (x.status!=='wait') continue;
-    x.status='run'; evDraw(); const t0=Date.now();
-    try{
-      const d=await streamAnalyze({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ()=>{});
-      x.sec=Math.round((Date.now()-t0)/1000);
-      if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=ERR[d.error]||[d.error||d.status, ...(d.notes||[])].join(' · ');
-        if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; evStop=true; toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); } }
-      else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
-        if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
-        else { const src=d.source||{}, ev=res.evidence||{};
-          const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
-          Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
-            info:evInfo(d,res,list), recipes:list.map(r=>({...r, source:base}))}); } }
-    }catch(e){ x.status='fail'; x.err='인터넷 연결이 끊겼어요'; }
-    evSave(); evDraw();
-  }
-  evRunning=false; evSave(); evDraw();
+  if (evRunning || !S.ev) return; evRunning=true; evStop=false; setAwake(true);
+  clearInterval(evTick); evTick=setInterval(evTickUI, 1000); evDraw();
+  const ev0=S.ev;
+  const worker=async()=>{ while(!evStop && S.ev===ev0){ const x=ev0.items.find(y=>y.status==='wait'); if (!x) return; await evOne(x); } };
+  await Promise.all(Array.from({length:EV_PAR}, worker));
+  evRunning=false; clearInterval(evTick); evSave(); evDraw(); if (S.tab==='eval' && !S.recipe) setAwake(false);
+  if (S.ev===ev0 && !ev0.items.some(y=>y.status==='wait')) toast('평가할 릴스를 모두 분석했어요');
 }
 function evStats(){ const it=S.ev.items, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length; return {ok, ng, rate: ok+ng ? Math.round(ok/(ok+ng)*100) : null}; }
 function evSummary(){
   const it=S.ev.items, s=evStats(), done=it.filter(x=>x.status==='ok');
   const tally=(xs)=>`${xs.length}개 → ✓${xs.filter(x=>x.mark==='ok').length} ✗${xs.filter(x=>x.mark==='ng').length}${xs.some(x=>!x.mark)?` 미평가${xs.filter(x=>!x.mark).length}`:''}`;
   const out=[`[릴쿡 평가 결과] ${new Date(S.ev.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} · ${VERSION} · ${S.ev.round>1?`${S.ev.round}회차`:'1회차'}${S.ev.fresh?' · 새로 분석':' · 저장된 분석 포함'}`,
-    `분석 ${it.length}개: 성공 ${done.length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}`,
+    `분석 ${it.length}개: 성공 ${done.length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}${done.length?` · 평균 ${Math.round(done.reduce((a,x)=>a+(x.sec||0),0)/done.length)}초`:''}`,
     `평가: ✓ ${s.ok} · ✗ ${s.ng} · 미평가 ${done.filter(x=>!x.mark).length}${s.rate!=null?` (맞은 비율 ${s.rate}%)`:''}${S.ev.prev&&S.ev.prev.rate!=null?` · 지난번 ${S.ev.prev.rate}%`:''}`];
   const withInfo=done.filter(x=>x.info);
   if (withInfo.length){
