@@ -130,7 +130,8 @@ const normComments = list => {
 };
 const showComments = list => list.map(c => (c.owner ? '작성자: ' : '') + c.text);
 
-async function run(body, emit, t0, req) {
+// ident: 서버 작업(api/jobs.js)이 부를 때 미리 정해 둔 {who, tester}. 앱이 직접 부를 때는 요청(req)에서 알아낸다.
+export async function run(body, emit, t0, req, ident = null) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return { status: 500, json: { error: 'no_key' } };
   // 이어서 분석: 앞 요청이 시간이 모자라 넘겨준 상태(가져온 캡션·댓글, Google에 올린 영상, 장면 기록)
@@ -173,8 +174,8 @@ async function run(body, emit, t0, req) {
   }
 
   // 하루 분석 횟수 (이미 분석된 릴스는 위에서 바로 돌려주므로 세지 않음). 테스터는 제한 없음
-  const user = req && req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
-  const tester = isTester(user), who = req ? whoOf(req, user) : null;
+  const user = !ident && req && req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
+  const tester = ident ? !!ident.tester : isTester(user), who = ident ? ident.who : req ? whoOf(req, user) : null;
   if (who && !tester && (await usedToday(who)) >= DAILY_LIMIT) {
     return { status: 429, json: { error: 'daily_limit', limit: DAILY_LIMIT, resetAt: kstMidnight().toISOString(), member: !!user } };
   }
@@ -303,7 +304,7 @@ async function run(body, emit, t0, req) {
 }
 
 // 실패(또는 레시피를 못 찾음)는 원인을 남겨서, 제보가 없어도 무엇이 고장 났는지 알 수 있게 한다
-async function recordFailure(body, out, t0) {
+export async function recordFailure(body, out, t0) {
   const j = out.json || {};
   if (out.status === 200 && !j.noRecipe) return;
   if (j.error === 'daily_limit' || j.error === 'passcode') return;
