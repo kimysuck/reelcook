@@ -60,8 +60,32 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelector('.evsum') && document.querySelector('.evsum').innerText.startsWith('3/3')", timeout=20000)
     print('다시 열자 평가:', pg.inner_text('.evsum'))
 
-    # 3) 서버에 작업 표가 없으면(SQL 실행 전) 예전 방식으로 그대로 분석
-    pg.click('#evBack'); setm('mode=caption&jobs=0&script=ok'); share(pg,'NOJOB01')
+    # 3) 설정 > AI 사용량의 서버 분석 점검: 정상
+    pg.click('#setBtn'); pg.click('#usageBtn'); pg.wait_for_function("document.querySelector('#jdiag') && !document.querySelector('#jdiag').innerText.includes('확인하는')", timeout=15000)
+    print('점검:', pg.inner_text('#jdiag')); assert '정상' in pg.inner_text('#jdiag'), 'diag not ok'
+    pg.evaluate("document.querySelectorAll('body > .modal').forEach(m=>m.remove()); $('#layer').innerHTML=''")
+    pg.click('#evBack'); pg.wait_for_timeout(300)
+
+    # 4) 서버 작업 상태 확인이 계속 오류로 답하면 → "인터넷 끊김"이 아니라 바로 예전 방식으로 분석해 레시피를 보여 준다
+    setm('mode=caption&jobsGetFail=1&script=ok,ok'); share(pg,'GETFAIL01')
+    pg.wait_for_selector('.rhead h1, .err', timeout=60000)
+    assert pg.locator('.rhead h1').count(), 'no fallback on server error: '+(pg.inner_text('.err') if pg.locator('.err').count() else '')
+    print('상태 확인 오류 → 예전 방식으로 분석: OK'); setm('jobsGetFail=0'); pg.evaluate("$('#layer').innerHTML=''"); pg.click('#back'); pg.wait_for_timeout(300)
+    pg.evaluate("jobsOff=false")
+
+    # 5) 서버가 작업을 시작하지 못하면(다음 단계 호출 실패) → 오래 기다리지 않고 예전 방식으로
+    pg.evaluate("localStorage.setItem('rc_job_stuck_ms','4000')")
+    setm('mode=caption&jobbase=http://localhost:1&script=ok'); share(pg,'STUCK01')
+    pg.wait_for_selector('.rhead h1, .err', timeout=60000)
+    assert pg.locator('.rhead h1').count(), 'no fallback when stuck: '+(pg.inner_text('.err') if pg.locator('.err').count() else '')
+    print('작업이 시작 안 됨 → 예전 방식으로 분석: OK'); pg.evaluate("$('#layer').innerHTML=''"); pg.click('#back'); pg.wait_for_timeout(300)
+    pg.evaluate("jobsOff=false; localStorage.removeItem('rc_job_stuck_ms')")
+    pg.evaluate("$('#layer').innerHTML=''"); pg.click('#setBtn'); pg.click('#usageBtn'); pg.wait_for_function("document.querySelector('#jdiag') && !document.querySelector('#jdiag').innerText.includes('확인하는')", timeout=20000)
+    print('점검(주소 문제):', pg.inner_text('#jdiag')); assert '문제 있음' in pg.inner_text('#jdiag'), 'diag did not show problem'
+    pg.evaluate("document.querySelectorAll('body > .modal').forEach(m=>m.remove()); $('#layer').innerHTML=''"); setm('jobbase=http://localhost:8788')
+
+    # 6) 서버에 작업 표가 없으면(SQL 실행 전) 예전 방식으로 그대로 분석
+    setm('mode=caption&nojobs=1&script=ok'); share(pg,'NOJOB01')
     pg.wait_for_selector('.rhead h1', timeout=30000); assert not any(j['link'].endswith('NOJOB01/') for j in st()['jobs']), 'used jobs when off'
-    print('작업 표 없을 때 예전 방식으로 분석: OK'); setm('jobs=1')
+    print('작업 표 없을 때 예전 방식으로 분석: OK'); setm('nojobs=0')
 print('errors', errs)

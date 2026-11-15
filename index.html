@@ -502,7 +502,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.8';
+const VERSION='v1.8.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -828,11 +828,19 @@ async function jobHeaders(){
 }
 const JOBS={ watch:new Map(), timer:null, misses:0,
   // 지켜보는 작업 전부를 한 번의 요청으로 확인한다(평가 모드 20개도 2.5초에 한 번)
+  net:0, srv:0,
+  tell(st){ for (const [id,w] of [...this.watch]) w({id, ...st}); },
   async poll(){ this.timer=null; const ids=[...this.watch.keys()]; if (!ids.length) return;
-    try{ const r=await fetch('/api/jobs?ids='+ids.join(','),{headers:await jobHeaders()}); const d=await r.json(); if (!r.ok) throw new Error(d.error||r.status); this.misses=0;
-      for (const j of d.jobs||[]){ const w=this.watch.get(j.id); if (w) w(j); }
-      for (const id of d.missing||[]){ const w=this.watch.get(id); if (w) w({id, status:'missing'}); }
-    }catch(e){ if (++this.misses>=40){ for (const [id,w] of this.watch) w({id, status:'neterr'}); this.misses=0; } }   // 잠깐 끊긴 건 계속 기다린다
+    let r, d;
+    try{ r=await fetch('/api/jobs?ids='+ids.join(','),{headers:await jobHeaders()}); }
+    catch(e){ if (++this.net>=40){ this.net=0; this.tell({status:'neterr'}); } this.schedule(2500); return; }   // 진짜 인터넷 끊김: 서버는 계속하니 오래 기다린다
+    this.net=0; d=await r.json().catch(()=>null);
+    if (!r.ok || !d){ // 서버가 오류로 답함 → 10초 넘게 계속되면 서버 작업을 포기하고 예전 방식으로
+      if (++this.srv>=4){ this.srv=0; this.tell({status:'srverr', code:`jobs_http_${r.status}${d&&d.error?':'+d.error:''}`}); }
+      this.schedule(2500); return; }
+    this.srv=0;
+    for (const j of d.jobs||[]){ const w=this.watch.get(j.id); if (w) w(j); }
+    for (const id of d.missing||[]){ const w=this.watch.get(id); if (w) w({id, status:'missing'}); }
     this.schedule(2500); },
   schedule(ms){ if (!this.timer && this.watch.size) this.timer=setTimeout(()=>this.poll(), ms); },
   on(id, fn){ this.watch.set(id, fn); this.schedule(1000); },
@@ -852,12 +860,21 @@ async function jobAnalyze(body, onEvent, knownId=null, extra={}){
     id=d.id;
   }
   onEvent({stage:'job', id});
-  return new Promise(res=>{ let last='';
+  // 서버 작업이 안 되면(오류 응답, 오래 멈춤) 기다리지 않고 예전 방식(앱이 직접 분석)으로 바로 한다
+  const giveUp=(code, res)=>{ JOBS.off(id); JOBS.drop([id]); jobsOff=true; console.warn('server job off:', code);
+    if (extra.eval) return res({status:0, error:'jobs_failed', code});   // 평가 모드는 2개씩 직접 하도록 돌려보낸다
+    onEvent({stage:'fallback'});
+    analyzeReq(body, onEvent).then(d=>res({...d, notes:[...(d.notes||[]), code]}), e=>res({status:0, error:e instanceof TypeError?'__net':'server', notes:[code]})); };
+  const stuckMs=+LS.get('rc_job_stuck_ms',0)||(extra.eval?600000:90000);
+  return new Promise(res=>{ let last='', since=Date.now();
     JOBS.on(id, j=>{
       if (j.status==='missing'){ JOBS.off(id); return res({status:404, error:'job_lost'}); }
       if (j.status==='neterr'){ JOBS.off(id); return res({status:0, error:'__net'}); }
       if (j.status==='cancel'){ JOBS.off(id); return res({status:0, error:'cancelled'}); }
+      if (j.status==='srverr') return giveUp(j.code, res);
       const st=j.status==='queued'&&!j.hop&&(!j.stage||j.stage==='queued')?'queued':j.stage;
+      if (st!==last) since=Date.now();
+      else if (j.status==='queued' && Date.now()-since>stuckMs) return giveUp('jobs_stuck', res);   // 서버가 작업을 시작하지 못함
       if (st && st!==last){ last=st; onEvent({stage:st, hop:j.hop}); }
       if (j.status==='done'||j.status==='failed'){ JOBS.off(id); JOBS.drop([id]); res(j.result||{status:500, error:'server'}); }
     });
@@ -880,6 +897,7 @@ async function analyze(opts={}){
     const onEv=ev=>{
       if (ev.stage==='job'){ S.jobId=ev.id; LS.set('rc_job',{id:ev.id, link:S.link.trim(), replaceId:S.replaceId||null, at:S.t0}); render(); }
       else if (ev.stage==='queued'){ S.phase='queued'; render(); }
+      else if (ev.stage==='fallback'){ S.jobId=null; LS.set('rc_job',null); S.phase='fetch'; S.note2='서버 분석을 쓸 수 없어서 바로 분석하고 있어요. 끝날 때까지 앱을 켜 두세요.'; render(); }
       else if (ev.stage==='cached'){ S.phase='cached'; render(); }
       else if (ev.stage==='fetch'){ S.phase='fetch'; render(); }
       else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; if (ev.videoSrc) prefetchReel(ev.videoSrc); render(); }
@@ -895,7 +913,7 @@ async function analyze(opts={}){
     };
     const data = useJob ? await jobAnalyze(body, onEv, opts.jobId||null) : await analyzeReq(body, onEv);
     LS.set('rc_job', null); S.jobId=null;
-    if (data.error==='__net') throw new TypeError('network');
+    if (data.error==='__net') throw new Error('__net');
     if (data.error==='job_lost') throw new Error('분석 작업 기록을 찾지 못했어요(3일이 지났거나 이미 받아 갔어요). 다시 시도해 주세요.');
     S.errCode = data.error ? [data.error, ...(data.notes||[])].filter(Boolean).join(' · ').slice(0,200) : '';
     if (data.error || (data.status && data.status!==200)){
@@ -927,9 +945,12 @@ async function analyze(opts={}){
     else if (set.length>1) toast(`이 릴스에서 레시피 ${set.length}개를 찾았어요`);
     else if (data.left!=null && data.left<=5) toast(`오늘 남은 분석 ${data.left}회`);
   }catch(e){
-    const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
+    // 진짜 인터넷 끊김만 "인터넷" 안내. 앱 안의 오류는 원인 코드를 남겨 문의할 때 알 수 있게 한다
+    const net = e.message==='__net' || e.message==='__cut' || (e instanceof TypeError && /failed to fetch|networkerror|load failed|network/i.test(e.message));
+    const bug = !net && (e instanceof TypeError || e instanceof ReferenceError || e instanceof SyntaxError || e instanceof RangeError);
     if (!net){ LS.set('rc_job', null); } S.jobId=null;   // 인터넷이 끊긴 거면 작업 번호를 남겨 둔다 → 다시 시도·다시 열 때 결과를 받아 옴
     if (net){ S.canRetry=true; S.error='인터넷 연결이 중간에 끊겼어요. 와이파이·데이터 상태를 확인하고 다시 시도해 주세요.'; }
+    else if (bug){ S.canRetry=true; S.error='레시피를 정리하지 못했어요. 한 번만 다시 시도해 주세요.'; S.errCode=('app:'+e.name+': '+e.message).slice(0,160); }
     else S.error = e.message && !/JSON|Unexpected/.test(e.message) ? e.message : '레시피를 정리하지 못했어요. 한 번만 다시 시도해 주세요.';
     S.busy=false; clearInterval(tick); S.t0=0; render();
   }
@@ -1384,8 +1405,8 @@ async function evOne(x){
   try{
     const body={caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, onEv=ev=>{ if (ev.stage==='job'){ if (x.job!==ev.id){ x.job=ev.id; evSave(); } return; } if (ev.stage){ x.stage=ev.stage; evTickUI(); } };
     const d=canJob() ? await jobAnalyze(body, onEv, x.job||null, {eval:true}) : await analyzeReq(body, onEv);
-    if (d.error==='cancelled'||d.error==='job_lost'){ Object.assign(x,{status:'wait', err:'', stage:'', job:null}); delete x.t0; delete x.live; evSave(); evDraw(); return; }
-    if (d.error==='__net') throw new TypeError('net');
+    if (d.error==='cancelled'||d.error==='job_lost'||d.error==='jobs_failed'){ Object.assign(x,{status:'wait', err:'', stage:'', job:null}); delete x.t0; delete x.live; evSave(); evDraw(); return; }
+    if (d.error==='__net') throw new Error('__net');
     x.job=null;
     x.sec=Math.round((Date.now()-x.t0)/1000);
     if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=[ERR[d.error]||d.error||d.status, ...(d.notes||[])].join(' · ').slice(0,300);
@@ -2070,9 +2091,21 @@ async function showUsage(){
       ${d.tracking&&!(d.rows||[]).length?'<div class="note" style="margin-top:10px">아직 기록이 없어요. Supabase에서 update-v1.3.sql을 실행했는지 확인해 주세요.</div>':''}
       <a class="btn ghost" style="width:100%;margin-top:14px;text-decoration:none" href="${esc(d.studio)}" target="_blank" rel="noopener">AI Studio에서 한도 보기</a>
       <p class="muted" style="font-size:.8rem;margin-top:14px">한 사람당 하루 분석 ${d.dailyLimit||10}회(한국 시간 0시에 다시 채워짐). 테스터 계정은 제한이 없어요.</p>
+      <label class="fl">서버 분석 (앱을 꺼도 분석)</label><div id="jdiag" class="muted" style="font-size:.86rem">확인하는 중…</div>
       <label class="fl">최근 실패 ${(d.failures||[]).length}건</label>
       ${(d.failures||[]).length?`<div class="fails">${d.failures.map(f=>`<div><b>${esc(f.error)}</b> <span class="muted">${esc(new Date(f.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}${f.sec?`, ${f.sec}초`:''}</span><div class="muted" style="font-size:.74rem;word-break:break-all">${esc([f.reel_code, f.mode, ...(f.notes||[])].filter(Boolean).join(' · '))}</div></div>`).join('')}</div>`:'<p class="muted" style="font-size:.84rem">최근 실패가 없어요.</p>'}`;
+    jobDiag(box.querySelector('#jdiag'));
   }catch(e){ ub.textContent=e.message||'불러오지 못했어요.'; }
+}
+async function jobDiag(el){
+  if (!el) return;
+  try{ const r=await fetch('/api/jobs?diag=1',{headers:await jobHeaders()}); const d=await r.json().catch(()=>({}));
+    if (r.status===501) { el.innerHTML='<b style="color:var(--hot)">꺼짐</b> · 서버에 Supabase 설정이 없어요'; return; }
+    if (!r.ok) { el.innerHTML=`<b style="color:var(--hot)">점검 실패</b> · 원인 코드 jobs_http_${r.status}${d.error?':'+esc(d.error):''}`; return; }
+    const ok=d.table && d.self==='ok';
+    el.innerHTML = ok ? `<b style="color:var(--herb)">정상</b> · 앱을 닫아도 서버가 분석해요`
+      : `<b style="color:var(--hot)">문제 있음</b> · ${!d.table?'작업 표가 없어요(Supabase에서 update-v1.8.sql 실행 필요). ':''}${d.self!=='ok'?`서버가 다음 단계를 부르지 못해요(${esc(d.self)}, 주소 ${esc(d.base)}). `:''}지금은 앱이 직접 분석해요(앱을 켜 두세요).`;
+  }catch(e){ el.textContent='점검하지 못했어요(인터넷 연결 확인)'; }
 }
 
 /* ---------- 전체 화면 영상 가이드 ----------
