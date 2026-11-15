@@ -15,7 +15,8 @@ with sync_playwright() as p:
     pg.evaluate("""()=>{const f=document.createElement('form');f.method='POST';f.action='/share-target';f.enctype='multipart/form-data';
  const t=document.createElement('input');t.name='text';t.value='https://www.instagram.com/reel/BACKTEST1/';f.appendChild(t);document.body.appendChild(f);f.submit();}""")
     pg.wait_for_selector('.rhead h1', timeout=30000)
-    print('share launch splash shown', pg.locator('#splash').count())
+    print('share launch splash shown', pg.locator('#splash').count())   # v1.10: 공유로 열어도 매번 보인다
+    pg.wait_for_selector('#splash', state='detached', timeout=6000)
     back=lambda: (pg.evaluate("history.back()"), pg.wait_for_timeout(350))
     # 요리 모드 → 뒤로 → 레시피
     pg.click('#cookBtn'); pg.wait_for_timeout(300); back()
@@ -27,6 +28,7 @@ with sync_playwright() as p:
     pg.click('#sp'); pg.click('[data-rt=step]'); pg.wait_for_timeout(200)
     pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))") ; pg.evaluate("saveResume()")
     pg.goto(B+'/'); pg.wait_for_timeout(1200)
+    pg.wait_for_selector('#splash', state='detached', timeout=6000)
     print('resumed recipe', pg.evaluate("S.recipe&&S.recipe.title"), 'servings', pg.evaluate("S.servings"), 'rtab', pg.evaluate("S.rtab"), 'splash', pg.locator('#splash').count())
     # 레시피 → 뒤로 → 첫 화면
     back(); print('back to root: recipe', pg.evaluate("!!S.recipe"), 'url', pg.url)
