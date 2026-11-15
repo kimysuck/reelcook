@@ -31,12 +31,12 @@ with sync_playwright() as p:
     pg.wait_for_function("(JSON.parse(localStorage.getItem('rc_job')||'null')||{}).id", timeout=20000)
     assert '앱을 닫아도 분석은 서버에서 계속돼요' in pg.inner_text('#app'), 'no background notice'
     pg.close(); print('앱 닫음')
-    s=wait_server(lambda s: any(j['link'].endswith('BGJOB01/') and j['status']=='done' for j in s['jobs']), 90)
+    s=wait_server(lambda s: any((j['link'] or '').endswith('BGJOB01/') and j['status']=='done' for j in s['jobs']), 90)
     print('서버 혼자 끝냄:', [(j['status'],j['hop']) for j in s['jobs']])
-    assert [j for j in s['jobs'] if j['link'].endswith('BGJOB01/')][0]['hop']==1, 'did not continue on server'
+    assert [j for j in s['jobs'] if (j['link'] or '').endswith('BGJOB01/')][0]['hop']==1, 'did not continue on server'
     pg=ctx.new_page(); pg.on('pageerror',lambda e:errs.append(str(e))); pg.goto(B+'/')
     pg.wait_for_selector('.rhead h1', timeout=20000); print('다시 열자 레시피:', pg.inner_text('.rhead h1'))
-    wait_server(lambda s: not any(j['link'].endswith('BGJOB01/') for j in s['jobs']), 10); print('받아 간 작업은 서버에서 삭제됨')
+    wait_server(lambda s: not any((j['link'] or '').endswith('BGJOB01/') for j in s['jobs']), 10); print('받아 간 작업은 서버에서 삭제됨')
     assert pg.evaluate("localStorage.getItem('rc_job')") in (None,'null'), 'rc_job not cleared'
     pg.click('#back'); pg.wait_for_timeout(300)
 
@@ -45,12 +45,12 @@ with sync_playwright() as p:
     pg.click('#setBtn'); pg.click('#evalBtn'); pg.wait_for_selector('#evIn')
     pg.fill('#evIn','https://www.instagram.com/reel/BGEVAL1/\nhttps://www.instagram.com/reel/BGEVAL2/\nhttps://www.instagram.com/reel/BGEVAL3/')
     pg.click('#evGo'); pg.wait_for_function("(JSON.parse(localStorage.getItem('rc_eval')).items).every(x=>x.job)", timeout=20000)
-    s=st(); ev=[j for j in s['jobs'] if 'BGEVAL' in j['link']]; print('맡긴 평가 작업', [(j['status'],j['prio']) for j in ev])
+    s=st(); ev=[j for j in s['jobs'] if 'BGEVAL' in (j['link'] or '')]; print('맡긴 평가 작업', [(j['status'],j['prio']) for j in ev])
     assert len(ev)==3 and all(j['prio']==1 for j in ev), 'eval jobs not queued on server'
     pg.close(); print('앱 닫음')
     most=0; t=time.time()
     while time.time()-t<60:
-        js=[j for j in st()['jobs'] if 'BGEVAL' in j['link']]; most=max(most, sum(j['status']=='running' for j in js))
+        js=[j for j in st()['jobs'] if 'BGEVAL' in (j['link'] or '')]; most=max(most, sum(j['status']=='running' for j in js))
         if js and all(j['status']=='done' for j in js): break
         time.sleep(0.3)
     print('서버가 동시에 돌린 최대 개수', most); assert most<=2, 'more than 2 at once'
@@ -86,8 +86,22 @@ with sync_playwright() as p:
     print('점검(주소 문제):', pg.inner_text('#jdiag')); assert '문제 있음' in pg.inner_text('#jdiag'), 'diag did not show problem'
     pg.evaluate("document.querySelectorAll('body > .modal').forEach(m=>m.remove()); $('#layer').innerHTML=''"); setm('jobbase=http://localhost:8788')
 
-    # 6) 서버에 작업 표가 없으면(SQL 실행 전) 예전 방식으로 그대로 분석
+    # 6) 안전망: 앱을 닫았고 서버의 다음 단계 호출도 끊긴 상태 → 1분마다 오는 sweep만으로 끝까지 분석된다
+    pg.evaluate("jobsOff=false; localStorage.setItem('rc_job_stuck_ms','600000')")
+    setm('mode=caption&jobbase=http://localhost:1&script=ok'); share(pg,'SWEEP01')
+    pg.wait_for_function("(JSON.parse(localStorage.getItem('rc_job')||'null')||{}).id", timeout=20000); pg.close(); print('앱 닫음(다음 단계 호출 끊김)')
+    time.sleep(1); assert [j for j in st()['jobs'] if (j['link'] or '').endswith('SWEEP01/')][0]['status']=='queued', 'should be stuck'
+    setm('jobbase=http://localhost:8788'); time.sleep(21)   # 20초 넘게 멈춘 작업만 다시 시작
+    print('sweep:', urllib.request.urlopen(B+'/api/jobs?sweep=1', data=b'{}').read().decode())
+    s=wait_server(lambda s: any((j['link'] or '').endswith('SWEEP01/') and j['status']=='done' for j in s['jobs']), 30); print('안전망으로 끝남 (앱은 닫힌 채)')
+    pg=ctx.new_page(); pg.on('pageerror',lambda e:errs.append(str(e))); pg.goto(B+'/'); pg.wait_for_selector('.rhead h1', timeout=20000); pg.evaluate("$('#layer').innerHTML=''; localStorage.removeItem('rc_job_stuck_ms')"); pg.click('#back')
+    pg.click('#setBtn'); pg.click('#usageBtn'); pg.wait_for_function("document.querySelector('#jdiag') && !document.querySelector('#jdiag').innerText.includes('확인하는')", timeout=15000)
+    print('점검:', pg.inner_text('#jdiag').replace('\n',' / ')); assert '끝까지 이어서 하기: 켜짐' in pg.inner_text('#jdiag') and '안전망(1분마다 확인): 켜짐' in pg.inner_text('#jdiag'), 'diag bg/sweep'
+    pg.evaluate("document.querySelectorAll('body > .modal').forEach(m=>m.remove()); $('#layer').innerHTML=''")
+    assert st()['bg']>0, 'waitUntil not used'
+
+    # 7) 서버에 작업 표가 없으면(SQL 실행 전) 예전 방식으로 그대로 분석
     setm('mode=caption&nojobs=1&script=ok'); share(pg,'NOJOB01')
-    pg.wait_for_selector('.rhead h1', timeout=30000); assert not any(j['link'].endswith('NOJOB01/') for j in st()['jobs']), 'used jobs when off'
+    pg.wait_for_selector('.rhead h1', timeout=30000); assert not any((j['link'] or '').endswith('NOJOB01/') for j in st()['jobs']), 'used jobs when off'
     print('작업 표 없을 때 예전 방식으로 분석: OK'); setm('nojobs=0')
 print('errors', errs)

@@ -502,7 +502,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.9';
+const VERSION='v1.9.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -2020,7 +2020,7 @@ $('#setBtn').onclick=()=>{
     <label class="fl">화면</label>${opt('th',S.theme,[['base','기본'],['bright','밝게'],['dark','다크'],['auto','자동']])}
     <label class="fl">글자 크기</label>${opt('fs',S.fs,[['m','보통'],['l','크게'],['xl','아주 크게']])}
     <label class="fl">분량 표시</label>${opt('un',S.unit,[['orig','영상 속 단위'],['precise','그램·밀리리터']])}
-    ${pushState()==='no'?'':`<label class="fl">분석 완료 알림</label>${pushState()==='denied'?'<p class="muted" style="font-size:.86rem">알림이 막혀 있어요. 폰 설정 > 애플리케이션 > 릴쿡(또는 Chrome) > 알림에서 허용해 주세요.</p>':opt('pu',pushState(),[['on','켜기'],['off','끄기']])}`}
+    ${pushState()==='no'?'':`<label class="fl">분석 완료 알림</label>${pushState()==='denied'?'<p class="muted" style="font-size:.86rem">알림이 막혀 있어요. 폰 설정 > 애플리케이션 > 릴쿡(또는 Chrome) > 알림에서 허용해 주세요.</p>':opt('pu',pushState(),[['on','켜기'],['off','끄기']])+`<button class="btn ghost sm" id="pushTest" style="margin-top:8px">알림 시험 보내기</button><div id="pushRes" class="muted" style="font-size:.84rem;margin-top:6px"></div>`}`}
     <label class="fl">앱 비밀번호</label>
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
@@ -2036,6 +2036,12 @@ $('#setBtn').onclick=()=>{
   const evb=$('#evalBtn'); if (evb) evb.onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
   document.querySelectorAll('[data-pu]').forEach(b=>b.onclick=async()=>{ if (b.dataset.pu==='on') await enablePush(); else { await disablePush(); toast('분석 완료 알림을 껐어요'); }
     document.querySelectorAll('[data-pu]').forEach(x=>x.classList.toggle('on',x.dataset.pu===pushState())); });
+  const pt=$('#pushTest'); if (pt) pt.onclick=async()=>{ const out=$('#pushRes');
+    if (pushState()!=='on'){ await enablePush(); if (pushState()!=='on') return; }
+    out.textContent='보내는 중…'; const sub=await getPushSub(); if (!sub){ out.textContent='알림 주소를 만들지 못했어요(폰 설정에서 알림 허용 확인)'; return; }
+    try{ const r=await fetch('/api/jobs?testpush=1',{method:'POST', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({push:sub})}); const d=await r.json();
+      out.textContent = d.status>=200&&d.status<300 ? '보냈어요. 몇 초 안에 알림이 오면 정상이에요. 안 오면 폰 설정 > 애플리케이션 > 릴쿡(또는 Chrome) > 알림을 확인해 주세요.' : `보내지 못했어요(원인 코드 push_${d.status||r.status})`;
+    }catch(e){ out.textContent='보내지 못했어요(인터넷 연결 확인)'; } };
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -2149,9 +2155,10 @@ async function jobDiag(el){
   try{ const r=await fetch('/api/jobs?diag=1',{headers:await jobHeaders()}); const d=await r.json().catch(()=>({}));
     if (r.status===501) { el.innerHTML='<b style="color:var(--hot)">꺼짐</b> · 서버에 Supabase 설정이 없어요'; return; }
     if (!r.ok) { el.innerHTML=`<b style="color:var(--hot)">점검 실패</b> · 원인 코드 jobs_http_${r.status}${d.error?':'+esc(d.error):''}`; return; }
-    const ok=d.table && d.self==='ok';
-    el.innerHTML = ok ? `<b style="color:var(--herb)">정상</b> · 앱을 닫아도 서버가 분석해요`
-      : `<b style="color:var(--hot)">문제 있음</b> · ${!d.table?'작업 표가 없어요(Supabase에서 update-v1.8.sql 실행 필요). ':''}${d.self!=='ok'?`서버가 다음 단계를 부르지 못해요(${esc(d.self)}, 주소 ${esc(d.base)}). `:''}지금은 앱이 직접 분석해요(앱을 켜 두세요).`;
+    const ok=d.table && d.self==='ok', net=d.sweepAgo!=null && d.sweepAgo<180;
+    el.innerHTML = (ok ? `<b style="color:var(--herb)">정상</b> · 앱을 닫아도 서버가 분석해요`
+      : `<b style="color:var(--hot)">문제 있음</b> · ${!d.table?'작업 표가 없어요(Supabase에서 update-v1.8.sql 실행 필요). ':''}${d.self!=='ok'?`서버가 다음 단계를 부르지 못해요(${esc(d.self)}, 주소 ${esc(d.base)}). `:''}지금은 앱이 직접 분석해요(앱을 켜 두세요).`)
+      + `<div style="margin-top:4px">끝까지 이어서 하기: ${d.bg?'<b style="color:var(--herb)">켜짐</b>':'<b style="color:var(--hot)">꺼짐</b>'} · 안전망(1분마다 확인): ${net?`<b style="color:var(--herb)">켜짐</b> (${d.sweepAgo}초 전)`:'<b style="color:var(--hot)">꺼짐</b> (Supabase에서 update-v1.9.sql 실행 필요)'}</div>`;
   }catch(e){ el.textContent='점검하지 못했어요(인터넷 연결 확인)'; }
 }
 

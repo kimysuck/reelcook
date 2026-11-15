@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 릴쿡 자동 테스트 전부 실행: 가짜 서버(인스타·Gemini·Supabase 흉내)를 테스트마다 새로 띄운다
 cd "$(dirname "$0")"
+[ -d ../node_modules/@vercel/functions ] || (cd .. && npm install --silent --no-audit --no-fund)   # 서버 코드가 쓰는 패키지
 PASS=0; FAIL=0
 for t in e2e_full consent_theme share_before_consent multi_quota_ui video_guide guide_order back_resume video_only daily_limit stage2 long_video step_text background push; do
   pkill -f mock-server.mjs 2>/dev/null; (command -v fuser >/dev/null && fuser -k 8788/tcp >/dev/null 2>&1); sleep 0.4

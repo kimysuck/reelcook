@@ -8,7 +8,7 @@ import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
-import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose } from '../lib/jobs.js';
+import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose, canBg, background, sweep } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
 const MAX_OPEN = 25;   // 한 기기에서 동시에 맡길 수 있는 작업 수(평가 모드 20개 + 여유)
@@ -58,6 +58,9 @@ async function step(id) {
 }
 
 export default async function handler(req, res) {
+  const q0 = req.query || {};
+  // 안전망: 누구나 불러도 되는 일(멈춘 작업만 다시 시작)이라 비밀번호 없이. Supabase 예약 작업(pg_cron)이 1분마다 부른다.
+  if (q0.sweep) { if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' }); const n = await sweep(); return res.status(200).json({ owners: n }); }
   const pass = process.env.APP_PASSCODE;
   if (pass && req.headers['x-app-passcode'] !== pass) return res.status(401).json({ error: 'passcode' });
   if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' });   // 앱은 예전 방식(직접 분석)으로 한다
@@ -70,15 +73,16 @@ export default async function handler(req, res) {
   // 서버끼리: 한 단계 실행 (끝까지 실행한 뒤 응답 — 응답 뒤에는 서버가 멈출 수 있어서)
   if (q.step) {
     if (req.headers['x-job-key'] !== jobKey()) return res.status(403).json({ error: 'key' });
-    const r = await step(String(q.step)).catch(e => { console.error(e); return 'error'; });
-    return res.status(200).json({ r });
+    const p = step(String(q.step)).catch(e => { console.error(e); return 'error'; });
+    if (canBg()) { background(p); return res.status(202).json({ r: 'started' }); }   // 바로 답하고 분석은 끝까지 계속
+    return res.status(200).json({ r: await p });   // waitUntil이 없는 환경: 끝까지 실행한 뒤 응답
   }
 
   const owner = ownerOf(req.headers['x-device']);
   if (!owner) return res.status(400).json({ error: 'device' });
   const ids = String(q.ids || '').split(',').filter(x => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 40);
 
-  if (req.method === 'POST') {
+  if (req.method === 'POST' && !q.testpush) {
     const b = req.body || {};
     const link = String(b.link || '').slice(0, 500);
     if (!shortcodeOf(link)) return res.status(400).json({ error: 'link' });
@@ -94,6 +98,12 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') { await deleteJobs(owner, ids); return res.status(200).json({ ok: true }); }
+
+  // 알림 시험: 지금 이 폰으로 알림을 하나 보낸다 (설정 > 알림 시험)
+  if (req.method === 'POST' && q.testpush) {
+    const status = await sendPush((req.body || {}).push, { title: '릴쿡 알림 시험', body: '이 알림이 보이면 분석 완료 알림도 와요', url: '/', tag: 'test', test: true });
+    return res.status(200).json({ status });
+  }
 
   // 이미 맡긴 작업에 알림 켜기/끄기 (분석 중에 "끝나면 알림 받기"를 누른 경우)
   if (req.method === 'PATCH') {
