@@ -57,4 +57,8 @@ with sync_playwright() as p:
     pg.click('#evBack'); pg.click('#setBtn'); pg.click('[data-pu="off"]'); pg.wait_for_timeout(300); pg.evaluate("$('#layer').innerHTML=''")
     n=len(pushes()); setm('mode=caption&script=ok'); share(pg,'PUSH004'); pg.wait_for_selector('.rhead h1', timeout=30000); pg.wait_for_timeout(1500)
     assert len(pushes())==n, 'pushed after turning off'; print('알림 끄면 안 보냄: OK')
+    # 5) 설정 > 알림 시험 보내기
+    pg.evaluate("localStorage.setItem('rc_push',JSON.stringify('on'))"); n=len(pushes())
+    pg.evaluate("$('#layer').innerHTML=''"); pg.click('#setBtn'); pg.click('#pushTest'); pg.wait_for_function("document.querySelector('#pushRes').innerText.startsWith('보냈어요')", timeout=10000)
+    t=pushes()[n]; print('알림 시험:', t['title'], t.get('test')); assert t['title']=='릴쿡 알림 시험' and t.get('test') and t['signed'], 'test push'
 print('errors', errs)

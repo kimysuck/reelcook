@@ -4,5 +4,10 @@
   "private": true,
   "type": "module",
   "description": "인스타 요리 릴스를 초보용 정밀 레시피로 바꿔주는 PWA",
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/functions": "3.11.3"
+  }
 }
