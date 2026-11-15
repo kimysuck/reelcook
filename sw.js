@@ -1,5 +1,5 @@
-// 릴쿡 서비스 워커: 오프라인 캐시 + 인스타 "공유" 받기
-const VERSION = 'reelcook-v182';
+// 릴쿡 서비스 워커: 오프라인 캐시 + 인스타 "공유" 받기 + 분석 완료 알림
+const VERSION = 'reelcook-v19';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/legal.html', '/icons/icon-192.png', '/icons/icon-512.png'];
 const INBOX = 'share-inbox';
 
@@ -52,4 +52,26 @@ self.addEventListener('fetch', e => {
   }
   // 3) 아이콘 등 정적 파일: 캐시 우선
   e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
+});
+
+// 분석 완료 알림: 서버가 보낸 푸시를 알림으로 보여 준다. 앱을 보고 있는 중이면 화면에 바로 나오니 알림은 생략.
+self.addEventListener('push', e => {
+  let m = {}; try { m = e.data ? e.data.json() : {}; } catch (err) {}
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (wins.some(w => w.visibilityState === 'visible')) return;
+    await self.registration.showNotification(m.title || '레시피가 준비됐어요', {
+      body: m.body || '눌러서 바로 보기', tag: m.tag || 'reelcook', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+      data: { url: m.url || '/' },
+    });
+  })());
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const w of wins) { if ('focus' in w) { await w.focus(); if (/eval=1/.test(url) && 'navigate' in w) w.navigate(url); return; } }
+    await self.clients.openWindow(url);
+  })());
 });

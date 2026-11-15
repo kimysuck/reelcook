@@ -14,6 +14,18 @@ steps:[{text:"팬에 [[0]]을 올려 바싹 굽는다",heat:"중불",seconds:180
 tools:[],nutrition_per_serving:{kcal:520,carb_g:12,protein_g:22,fat_g:42,sugar_g:5,sodium_mg:1300},beginner_notes:["재료를 먼저 다 손질해 두세요"]};
 const st={mode:'caption', gem:[], firstEmpty:false, script:[], usage:{}, quota:{}, quotaFill:0, fails:[]};
 const realFetch=globalThis.fetch; const JOBS=[];
+// 가짜 "폰": 알림 받을 주소와 열쇠. 서버가 보낸 푸시를 실제 폰처럼 복호화해서 기록한다
+import crypto from 'node:crypto';
+const PHONE=crypto.createECDH('prime256v1'); PHONE.generateKeys(); const PHONE_AUTH=crypto.randomBytes(16); const PUSHES=[];
+const PHONE_SUB={endpoint:'https://fcm.googleapis.com/fcm/send/test-phone', keys:{p256dh:PHONE.getPublicKey().toString('base64url'), auth:PHONE_AUTH.toString('base64url')}};
+function phoneReceive(opts){ const hm=(k,d)=>crypto.createHmac('sha256',k).update(d).digest(); const enc=Buffer.from(opts.body);
+  const salt=enc.subarray(0,16), n=enc[20], asPub=enc.subarray(21,21+n), ct=enc.subarray(21+n);
+  const ikm=hm(hm(PHONE_AUTH,PHONE.computeSecret(asPub)),Buffer.concat([Buffer.from('WebPush: info\0'),PHONE.getPublicKey(),asPub,Buffer.from([1])]));
+  const prk=hm(salt,ikm), d=crypto.createDecipheriv('aes-128-gcm',hm(prk,Buffer.from('Content-Encoding: aes128gcm\0\x01')).subarray(0,16),hm(prk,Buffer.from('Content-Encoding: nonce\0\x01')).subarray(0,12));
+  d.setAuthTag(ct.subarray(ct.length-16)); const pl=Buffer.concat([d.update(ct.subarray(0,ct.length-16)),d.final()]);
+  const h=opts.headers.Authorization, t=h.match(/t=([^,]+)/)[1], k=Buffer.from(h.match(/k=(\S+)/)[1],'base64url'), [a,b,sg]=t.split('.');
+  const key=crypto.createPublicKey({key:{kty:'EC',crv:'P-256',x:k.subarray(1,33).toString('base64url'),y:k.subarray(33).toString('base64url')},format:'jwk'});
+  PUSHES.push({...JSON.parse(pl.subarray(0,pl.length-1).toString()), signed:crypto.verify('sha256',Buffer.from(a+'.'+b),{key,dsaEncoding:'ieee-p1363'},Buffer.from(sg,'base64url'))}); }
 // analysis_jobs 표 흉내 (lib/jobs.js가 쓰는 필터만)
 function jobsRest(url, opts){
   const q=new URL(url).searchParams, m=(opts.method||'GET').toUpperCase();
@@ -34,7 +46,8 @@ function jobsRest(url, opts){
   if (val('limit')) out=out.slice(0,+val('limit')); return J(out.map(r=>({...r})));
 }
 globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
-  if(url.startsWith('http://localhost:8788/')) return realFetch(url,opts);   // 서버가 스스로 다음 단계를 부를 때
+  if(url.startsWith('http://localhost:8788/')) return realFetch(url,opts);
+  if(url.startsWith('https://fcm.googleapis.com/')){ try{ phoneReceive(opts); }catch(e){ PUSHES.push({error:String(e)}); } return {ok:true,status:201}; }   // 서버가 스스로 다음 단계를 부를 때
   if(url.startsWith('https://fake.supabase.co/rest/v1/analysis_jobs')){ if(st.nojobs) return {ok:false,status:404,json:async()=>({message:'relation does not exist'})}; return jobsRest(url,opts); }
   // Google 파일 저장소(Files API) 흉내: 올리기 시작 → 올리기 → 처리 상태 → 지우기
   if(url.startsWith('https://generativelanguage.googleapis.com/upload/v1beta/files')){ st.files=st.files||{up:0,del:0};
@@ -116,6 +129,8 @@ http.createServer(async (req,res)=>{
     if(b.op==='delete'){ DB[t]=DB[t].filter(r=>!b.ids.includes(r.id||r.post_id+'|'+r.user_id)); res.end('{}'); return; } }
   if(u.pathname.startsWith('/__photo/')){ const buf=PHOTOS.get(decodeURIComponent(u.pathname.slice(9))); res.setHeader('Content-Type','image/jpeg'); res.end(buf||''); return; }
   if(u.pathname==='/__nocol'){ st.nocol=u.searchParams.get('v')==='1'; res.end('ok'); return; }
+  if(u.pathname==='/__pushsub'){ res.end(JSON.stringify(PHONE_SUB)); return; }
+  if(u.pathname==='/__pushes'){ res.end(JSON.stringify(PUSHES)); return; }
   if(u.pathname==='/__unsafe'){ st.unsafeImage=u.searchParams.get('v')==='1'; res.end('ok'); return; }
   if(u.pathname==='/__set'){ if(u.searchParams.has('fill')){ st.quotaFill=+u.searchParams.get('fill'); st.quota={}; } if(u.searchParams.has('email')) st.userEmail=u.searchParams.get('email'); st.videoFile=u.searchParams.get('video')||null; st.script=(u.searchParams.get('script')||'').split(',').filter(Boolean); if(u.searchParams.get('resetUsage')) st.usage={}; if(u.searchParams.has('deadline')) process.env.ANALYZE_DEADLINE_MS=u.searchParams.get('deadline'); if(u.searchParams.has('resetFiles')) st.files={up:0,del:0}; if(u.searchParams.has('nojobs')) st.nojobs=u.searchParams.get('nojobs')==='1'; if(u.searchParams.has('jobsGetFail')) st.jobsGetFail=u.searchParams.get('jobsGetFail')==='1'; if(u.searchParams.has('jobbase')) process.env.JOB_BASE_URL=u.searchParams.get('jobbase'); if(u.searchParams.has('jobs')){ if(u.searchParams.get('jobs')==='0') delete process.env.JOB_BASE_URL; else process.env.JOB_BASE_URL='http://localhost:8788'; } Object.assign(st,{mode:u.searchParams.get('mode')||'caption',firstEmpty:u.searchParams.get('empty')==='1',gem:[]}); res.end('ok'); return; }
   if(u.pathname==='/__st'){ res.end(JSON.stringify({jobs:JOBS.map(j=>({id:j.id,status:j.status,stage:j.stage,hop:j.hop,prio:j.prio,owner:j.owner,link:j.link})),files:st.files,apifyCalls:st.apifyCalls||0,uploads:st.uploads,mods:st.mods,posts:DB.posts.map(p=>({kind:p.kind,flagged:p.flagged,title:p.title,photo:p.photo_path})),profiles:DB.profiles,dbcalls:st.dbcalls,cache:[...CACHE.keys()],ranges:st.ranges,apify:st.apify,usage:st.usage,quota:st.quota,lastWho:st.lastWho,fails:st.fails,cacheSrc:[...CACHE.values()].map(c=>Object.keys(c.source||{})),script:st.script,gemModels:st.gem.map(g=>g.model+':'+(g.sc||'')+':'+(g.kind||'')+':'+g.nparts+':'+JSON.stringify(g.cfg&&g.cfg.mediaResolution||'')),gem:st.gem.map(g=>({file:g.file,kind:g.kind,sc:g.sc,vm:g.vm,cfg:g.cfg,nparts:g.nparts,hasComment:g.prompt.includes('설탕 반숟갈 추가'),tail:g.prompt.slice(-260)}))})); return; }

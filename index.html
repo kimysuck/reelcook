@@ -502,7 +502,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.8.2';
+const VERSION='v1.9';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -515,6 +515,7 @@ const IC={
   refresh:SV('<path d="M19 12a7 7 0 1 1-2-4.9"/><path d="M19 4v4h-4"/>'), trash:SV('<path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/>'),
   heart:SV('<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.5a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z"/>'), heartOn:SV('<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.5a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z" fill="currentColor"/>'),
   edit:SV('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'), flag:SV('<path d="M5 21V4"/><path d="M5 4.5h12l-2.5 4 2.5 4H5"/>'), plus:SV('<path d="M12 5v14M5 12h14"/>'),
+  bell:SV('<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
   book:SV('<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>'), chat:SV('<path d="M4 5.5h16v10H9l-5 4z"/>'), shield:SV('<path d="M12 3.5 5 6v5.5c0 4.3 3 7.6 7 9 4-1.4 7-4.7 7-9V6z"/>'), sun:SV('<circle cx="12" cy="12" r="3.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>'),
 };
 const gauge=(n)=>`<span class="gauge g${n}" aria-hidden="true"><i></i><i></i><i></i></span>`;
@@ -820,7 +821,7 @@ async function analyzeReq(body, onEvent){
    작업을 맡기고(POST /api/jobs) 주기적으로 상태를 확인한다. 앱이 꺼졌다 켜지면 기억해 둔 작업 번호로 결과를 받아 온다.
    서버에 작업 표가 아직 없으면(SQL 실행 전) 예전 방식(직접 분석)으로 한다. */
 const DEVICE=(()=>{ let d=LS.get('rc_device',''); if(!/^[0-9a-f]{32}$/.test(d)){ d=[...crypto.getRandomValues(new Uint8Array(16))].map(x=>x.toString(16).padStart(2,'0')).join(''); LS.set('rc_device',d); } return d; })();
-let jobsOff=false, jobsKnown=false;
+let jobsOff=false, jobsKnown=false; S.wantEval=/[?&]eval=1/.test(location.search);
 async function probeJobs(){ if (jobsOff||jobsKnown) return; try{ const r=await fetch('/api/jobs?ids=',{headers:await jobHeaders()}); if (r.status===501) jobsOff=true; jobsKnown=true; }catch(e){} }
 async function jobHeaders(){
   let tok=null; try{ if (sb && S.user){ const {data}=await sb.auth.getSession(); tok=data.session&&data.session.access_token; } }catch(e){}
@@ -853,7 +854,8 @@ document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState
 async function jobAnalyze(body, onEvent, knownId=null, extra={}){
   let id=knownId;
   if (!id){
-    const r=await fetch('/api/jobs',{method:'POST', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({...body, ...extra})});
+    const push=await getPushSub();
+    const r=await fetch('/api/jobs',{method:'POST', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({...body, ...extra, ...(push?{push}:{})})});
     const d=await r.json().catch(()=>({}));
     if (r.status===501 || d.error==='no_jobs'){ jobsOff=true; return analyzeReq(body, onEvent); }
     if (!r.ok || !d.id) return {status:r.status, error:d.error||'server'};
@@ -881,6 +883,46 @@ async function jobAnalyze(body, onEvent, knownId=null, extra={}){
   });
 }
 const canJob=()=>!jobsOff;
+/* ---------- 분석 완료 알림 (웹 푸시) ----------
+   알림을 켜면 이 폰의 "알림 받을 주소"를 분석 작업에 같이 맡긴다 → 서버가 끝나면 알림을 보낸다(앱을 꺼도). */
+function pushState(){
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window) || !S.pushKey) return 'no';
+  if (Notification.permission==='denied') return 'denied';
+  return Notification.permission==='granted' && LS.get('rc_push','on')!=='off' ? 'on' : 'off';
+}
+const b64uBytes=s=>{ const b=atob(s.replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(b, c=>c.charCodeAt(0)); };
+const bytesB64u=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+async function getPushSub(){
+  if (pushState()!=='on') return null;
+  if (window.__testPushSub) return window.__testPushSub;   // 자동 테스트용(헤드리스 브라우저는 실제 푸시 구독이 안 됨)
+  try{ const reg=await Promise.race([navigator.serviceWorker.ready, new Promise((_,no)=>setTimeout(()=>no(new Error('sw')),3000))]);
+    let sub=await reg.pushManager.getSubscription();
+    if (sub && sub.options && sub.options.applicationServerKey && bytesB64u(sub.options.applicationServerKey)!==S.pushKey){ await sub.unsubscribe(); sub=null; }   // 서버 열쇠가 바뀌면 다시 구독
+    if (!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uBytes(S.pushKey)});
+    return sub.toJSON();
+  }catch(e){ console.warn('push', e); return null; }
+}
+const pendingJobIds=()=>[S.jobId, ...(S.ev?S.ev.items.filter(x=>x.status==='run'&&x.job).map(x=>x.job):[])].filter(Boolean);
+async function setJobsPush(sub){ const ids=pendingJobIds(); if (!ids.length) return;
+  try{ await fetch('/api/jobs?ids='+ids.join(','),{method:'PATCH', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({push:sub})}); }catch(e){} }
+async function enablePush(){
+  if (pushState()==='no') return;
+  let p=Notification.permission; if (p==='default') p=await Notification.requestPermission();
+  if (p!=='granted'){ toast(p==='denied'?'알림이 막혀 있어요. 폰 설정 > 애플리케이션 > 릴쿡(또는 Chrome) > 알림에서 허용해 주세요':'알림을 켜지 않았어요'); render(); return; }
+  LS.set('rc_push','on'); const sub=await getPushSub();
+  if (!sub){ toast('알림을 켜지 못했어요. 잠시 뒤 다시 시도해 주세요'); return; }
+  await setJobsPush(sub); toast('분석이 끝나면 알림으로 알려 드릴게요');
+  if (!S.recipe && !S.cooking && !$('#layer').innerHTML.trim()) render();
+}
+async function disablePush(){
+  LS.set('rc_push','off'); await setJobsPush(null);
+  try{ const reg=await navigator.serviceWorker.ready, sub=await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); }catch(e){}
+}
+function pushCTA(){ const st=pushState();
+  if (st==='on') return `<div class="note bg" style="margin-top:10px">${IC.bell}끝나면 알림으로 알려 드릴게요.</div>`;
+  if (st==='off') return `<button class="btn sec" data-push-on style="margin-top:12px;width:100%">${IC.bell}끝나면 알림 받기</button>`;
+  return ''; }
+document.addEventListener('click', e=>{ if (e.target.closest && e.target.closest('[data-push-on]')) enablePush(); });
 async function analyze(opts={}){
   const igLink=/instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
@@ -999,7 +1041,7 @@ function viewProgress(){
     <div class="prog-title">${title}</div>
     <div class="prog-time"><span id="elapsed">${sec}초</span> 지남, ${hint}</div>
     ${S.note2?`<div class="note" style="margin-top:14px">${esc(S.note2)}</div>`:''}
-    ${S.jobId?`<div class="note bg" style="margin-top:14px">${IC.check}앱을 닫아도 분석은 서버에서 계속돼요. 다시 열면 결과가 바로 나와요.</div>`:''}
+    ${S.jobId?`<div class="note bg" style="margin-top:14px">${IC.check}앱을 닫아도 분석은 서버에서 계속돼요. 다시 열면 결과가 바로 나와요.</div>${pushCTA()}`:''}
     ${checks}
     <p class="muted" style="margin-top:22px;font-size:.82rem">분석하는 동안 화면이 꺼지지 않아요.</p>
   </div>`;
@@ -1357,7 +1399,7 @@ function viewEval(){
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
-  return head+`<div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
+  return head+`${it.some(x=>x.status==='run'&&x.job)?pushCTA():''}<div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
     <div class="row" style="margin-top:12px;gap:8px">${evRunning?'<button class="btn ghost" style="flex:1" id="evStop">멈추기</button>':it.some(x=>x.status==='wait')?'<button class="btn pri" style="flex:1" id="evRun">이어서 분석</button>':''}
       <button class="btn sec" style="flex:1" id="evCopy">결과 요약 복사</button>${evRunning?'':'<button class="btn ghost" style="flex:1" id="evNew">새 평가</button>'}</div>
     ${evRunning?'':`<button class="btn link" id="evAgain" style="margin-top:8px">${IC.refresh}같은 링크로 다시 분석 (고친 뒤 비교)</button>`}
@@ -1713,7 +1755,7 @@ function renderWho(){
 }
 async function initCloud(){
   try{
-    const c=await (await fetch('/api/config')).json();
+    const c=await (await fetch('/api/config')).json(); S.pushKey=c.push||null;
     if (!c.supabase || !window.supabase) return;
     sb=window.supabase.createClient(c.supabase.url, c.supabase.key, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'pkce'}});
     sb.auth.onAuthStateChange((ev, session)=>{ setTimeout(()=>onSession(session), 0); });
@@ -1734,7 +1776,8 @@ async function onSession(session){
 }
 async function checkTester(){
   try{ const {data}=await sb.auth.getSession(), tok=data.session&&data.session.access_token; if (!tok) return;
-    const r=await fetch('/api/usage',{headers:{...(S.pass?{'x-app-passcode':S.pass}:{}), Authorization:'Bearer '+tok}}); const d=await r.json(); S.tester=!!d.tester; }catch(e){}
+    const r=await fetch('/api/usage',{headers:{...(S.pass?{'x-app-passcode':S.pass}:{}), Authorization:'Bearer '+tok}}); const d=await r.json(); S.tester=!!d.tester;
+    if (S.tester && S.wantEval){ S.wantEval=false; whenConsented(()=>{ if (!S.recipe && !S.busy){ S.tab='eval'; render(); } }); } }catch(e){}
 }
 async function loadMyRecipes(){
   S.myLoading=true; if (S.tab==='box' && !S.recipe) render();
@@ -1977,6 +2020,7 @@ $('#setBtn').onclick=()=>{
     <label class="fl">화면</label>${opt('th',S.theme,[['base','기본'],['bright','밝게'],['dark','다크'],['auto','자동']])}
     <label class="fl">글자 크기</label>${opt('fs',S.fs,[['m','보통'],['l','크게'],['xl','아주 크게']])}
     <label class="fl">분량 표시</label>${opt('un',S.unit,[['orig','영상 속 단위'],['precise','그램·밀리리터']])}
+    ${pushState()==='no'?'':`<label class="fl">분석 완료 알림</label>${pushState()==='denied'?'<p class="muted" style="font-size:.86rem">알림이 막혀 있어요. 폰 설정 > 애플리케이션 > 릴쿡(또는 Chrome) > 알림에서 허용해 주세요.</p>':opt('pu',pushState(),[['on','켜기'],['off','끄기']])}`}
     <label class="fl">앱 비밀번호</label>
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
@@ -1990,6 +2034,8 @@ $('#setBtn').onclick=()=>{
   $('#wd').onclick=withdraw;
   $('#usageBtn').onclick=showUsage;
   const evb=$('#evalBtn'); if (evb) evb.onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
+  document.querySelectorAll('[data-pu]').forEach(b=>b.onclick=async()=>{ if (b.dataset.pu==='on') await enablePush(); else { await disablePush(); toast('분석 완료 알림을 껐어요'); }
+    document.querySelectorAll('[data-pu]').forEach(x=>x.classList.toggle('on',x.dataset.pu===pushState())); });
   document.querySelectorAll('[data-un]').forEach(b=>b.onclick=()=>{ S.unit=b.dataset.un; LS.set('rc_unit',S.unit); document.querySelectorAll('[data-un]').forEach(x=>x.classList.toggle('on',x===b)); });
   const ep=$('#editPf'); if(ep) ep.onclick=()=>openProfile(false);
   bindLogin(); const lo=$('#logout'); if(lo) lo.onclick=async()=>{ await signOut(); $('#layer').innerHTML=''; toast('로그아웃했어요'); };
@@ -1999,8 +2045,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-22';
-const TERMS_CHANGES='앱을 닫아도 서버가 분석을 끝까지 하도록 바꾸고(분석 작업 기록은 결과를 받으면 바로, 늦어도 3일 뒤 삭제), 저장한 레시피 직접 수정과 "결과가 이상해요"를 더했어요(11월 22일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-23';
+const TERMS_CHANGES='분석이 끝나면 알림을 받을 수 있게 하고(켠 경우만), 앱을 닫아도 서버가 분석을 끝까지 하도록 바꿨어요. 저장한 레시피 직접 수정과 "결과가 이상해요"도 더했어요(11월 23일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -2034,8 +2080,9 @@ function showGate(){
         <tr><td>게시물, 저장한 레시피(직접 고친 내용 포함)</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
         <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr>
         <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr>
-        <tr><td>분석 작업(링크·진행 상황·결과)</td><td>앱을 닫아도 분석 이어서 하기</td><td>결과를 받으면 삭제, 최대 3일</td></tr></table>
-        <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
+        <tr><td>분석 작업(링크·진행 상황·결과)</td><td>앱을 닫아도 분석 이어서 하기</td><td>결과를 받으면 삭제, 최대 3일</td></tr>
+        <tr><td>알림 받을 주소(알림을 켠 경우)</td><td>분석 완료 알림</td><td>분석 작업과 함께 삭제</td></tr></table>
+        <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 알림을 켜면 암호화된 알림이 Google 푸시 서비스(미국)를 거쳐 와요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
     </div>
     <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
     <button class="btn pri" id="agGo" disabled style="margin-top:18px;min-height:56px">동의하고 시작</button>

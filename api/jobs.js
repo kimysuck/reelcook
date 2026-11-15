@@ -7,10 +7,24 @@ import { run, recordFailure } from './analyze.js';
 import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
+import { sendPush, cleanSub } from '../lib/push.js';
 import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
 const MAX_OPEN = 25;   // 한 기기에서 동시에 맡길 수 있는 작업 수(평가 모드 20개 + 여유)
+
+// 끝나면 알림: 보통 분석은 하나씩, 평가 모드는 이 기기의 평가 작업이 모두 끝났을 때 한 번만
+async function notify(job, out) {
+  const sub = job.body && job.body.push; if (!sub) return;
+  if (job.prio === 1) {
+    if (await countOpen(job.owner, 1) > 0) return;
+    return sendPush(sub, { title: '평가 분석이 모두 끝났어요', body: '눌러서 결과를 확인하고 ✓/✗를 골라 주세요', url: '/?eval=1', tag: 'eval' });
+  }
+  let title = ''; try { const t = out.json && out.json.text; const j = t ? JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)) : null; title = (j && j.recipes && j.recipes[0] && j.recipes[0].title) || ''; } catch {}
+  const ok = out.status === 200 && title;
+  return sendPush(sub, ok ? { title: `${title.slice(0, 40)} 레시피가 준비됐어요`, body: '눌러서 바로 보기', url: '/?job=1', tag: 'job-' + job.id }
+    : { title: '레시피를 정리하지 못했어요', body: '눌러서 이유를 확인해 주세요', url: '/?job=1', tag: 'job-' + job.id });
+}
 
 async function step(id) {
   const job = await getJob(id);
@@ -38,6 +52,7 @@ async function step(id) {
   await recordFailure(body, out, t0);
   const sec = Math.round((Date.now() - started) / 1000), wait = Math.max(0, Math.round((started - Date.parse(job.created_at)) / 1000));
   await patchJob(id, { status: out.status === 200 ? 'done' : 'failed', stage: 'done', state: null, result: { status: out.status, ...out.json, sec, wait } });
+  await notify(job, out).catch(() => {});
   await kickNext(job.owner);
   return 'done';
 }
@@ -69,7 +84,8 @@ export default async function handler(req, res) {
     if (!shortcodeOf(link)) return res.status(400).json({ error: 'link' });
     if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
     const user = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
-    const body = { link, caption: String(b.caption || '').slice(0, 8000), noCache: !!b.noCache, fromVideo: false, ...(b.report ? { report: String(b.report).slice(0, 20) } : {}) };
+    const push = cleanSub(b.push);   // 끝나면 알림 받을 주소(알림을 켠 경우만)
+    const body = { link, caption: String(b.caption || '').slice(0, 8000), noCache: !!b.noCache, fromVideo: false, ...(b.report ? { report: String(b.report).slice(0, 20) } : {}), ...(push ? { push } : {}) };
     const job = await createJob({ owner, who: whoOf(req, user), tester: isTester(user), prio: b.eval ? 1 : 0, link, body, status: 'queued', stage: 'queued' });
     if (!job) return res.status(503).json({ error: 'no_jobs' });
     if (Math.random() < 0.05) cleanupJobs();
@@ -78,6 +94,18 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') { await deleteJobs(owner, ids); return res.status(200).json({ ok: true }); }
+
+  // 이미 맡긴 작업에 알림 켜기/끄기 (분석 중에 "끝나면 알림 받기"를 누른 경우)
+  if (req.method === 'PATCH') {
+    const push = cleanSub((req.body || {}).push);
+    for (const j of await listJobs(owner, ids)) {
+      if (j.status === 'done' || j.status === 'failed') continue;
+      const full = await getJob(j.id); if (!full) continue;
+      const { push: _p, ...rest } = full.body || {};
+      await patchJob(j.id, { body: push ? { ...rest, push } : rest });
+    }
+    return res.status(200).json({ ok: true });
+  }
 
   // GET: 상태 확인. 멈춰 보이는 작업(서버가 꺼졌거나 다음 단계 호출이 끊김)은 다시 시작시킨다
   const rows = await listJobs(owner, ids);
