@@ -13,8 +13,11 @@ def private(name, fallback):
     return p.read_text() if p.exists() else fallback
 
 def head(day, idx, total):
-    lab = '앱 소개' if day == 'pin' else f'DAY {day}'
-    return f'<div class="top"><div class="logo">릴쿡 <span class="bars"><i></i><i></i><i></i></span></div><div>{lab} · {idx} / {total}</div></div>'
+    logo = '<div class="logo">릴쿡 <span class="bars"><i></i><i></i><i></i></span></div>'
+    if day == 'pin':
+        return f'<div class="top">{logo}<div>앱 소개 · {idx} / {total}</div></div>'
+    # 날짜 번호를 크게: 왼쪽 DAY N, 오른쪽 로고와 쪽수
+    return f'<div class="top top2"><div class="dayno">DAY<b>{day}</b></div><div class="pg">{logo}<span>{idx} / {total}</span></div></div>'
 
 def rows(rs):
     out = '<div class="rows">'
@@ -43,7 +46,7 @@ DAYS = []
 # ───────────── DAY 1 ─────────────
 d1 = []
 d1.append(('cover', f'''
-<div class="kick">DAY 1 · 2026.11.11 (수)</div>
+<div class="kick">2026.11.11 (수)</div>
 <h1>아이디어에서<br>v1.3까지</h1>
 <p class="lead">인스타그램 요리 릴스를 공유하면 AI가 초보자용 레시피로 정리해 주는 웹앱 <b>릴쿡</b>의 첫날 기록입니다. '저장만 해 두던 요리 릴스를 실제로 따라 할 수 있게 하자'는 문제의식에서 출발해, 분석 파이프라인부터 로그인·DB, 디자인, 약관까지 서비스의 뼈대를 하루 만에 세웠습니다.</p>
 <div class="stat"><div><b>20건</b>GitHub 커밋</div><div><b>v0.1 → v1.3.1</b>버전</div><div><b>09:48 – 23:32</b>작업 시간</div></div>
@@ -186,7 +189,7 @@ DAYS.append((1, d1))
 # ───────────── DAY 2 ─────────────
 d2 = []
 d2.append(('cover', f'''
-<div class="kick">DAY 2 · 2026.11.12 (목)</div>
+<div class="kick">2026.11.12 (목)</div>
 <h1>쓰기 편한 앱,<br>보여 줄 수 있는 앱</h1>
 <p class="lead">전날 밤부터 이어진 작업으로 <b>앱 사용 흐름</b>을 다듬고, 영상을 보며 따라 하는 <b>전체 화면 영상 가이드</b>를 만들었습니다. 이어서 비공개 계정에 올릴 20초 데모 광고 영상을 제작했습니다.</p>
 <div class="stat"><div><b>4건</b>GitHub 커밋</div><div><b>v1.3.2 → v1.4.1</b>버전</div><div><b>20초</b>데모 영상</div></div>
@@ -259,7 +262,7 @@ DAYS.append((2, d2))
 # ───────────── DAY 3 ─────────────
 d3 = []
 d3.append(('cover', f'''
-<div class="kick">DAY 3 · 2026.11.13 (금)</div>
+<div class="kick">2026.11.13 (금)</div>
 <h1>영상만 있는 릴스를<br>읽어 내기</h1>
 <p class="lead">캡션이나 댓글 없이 <b>영상의 자막과 음성에만 레시피가 담긴 릴스</b>는 재료와 분량을 제대로 뽑아내지 못했습니다. 실제 실패 사례를 바탕으로 분석을 두 단계로 나누는 구조로 다시 설계했습니다.</p>
 <div class="stat"><div><b>1건</b>GitHub 커밋</div><div><b>v1.5</b>버전</div><div><b>2단계</b>분석 파이프라인</div></div>
@@ -315,7 +318,7 @@ DAYS.append((3, d3))
 # ───────────── DAY 4 ─────────────
 d4 = []
 d4.append(('cover', f'''
-<div class="kick">DAY 4 · 2026.11.14 (토)</div>
+<div class="kick">2026.11.14 (토)</div>
 <h1>운영할 수 있는<br>서비스로</h1>
 <p class="lead">기능 전체를 다시 점검해 <b>5단계 로드맵</b>을 세우고, 그 1단계로 사용량 제한·실패 기록·자동 테스트 등 <b>운영 기반</b>을 갖췄습니다. 이후 작업을 Claude Code로 옮겨 이어 갈 수 있도록 작업 규칙도 문서화했습니다. 자정 직전에는 로드맵 2단계(평가 모드·레시피 직접 수정·재분석)를 <b>v1.7</b>로 배포했습니다.</p>
 <div class="stat"><div><b>6건</b>GitHub 커밋</div><div><b>v1.6 → v1.7</b>버전</div><div><b>10개</b>자동 테스트</div></div>
@@ -406,7 +409,7 @@ DAYS.append((4, d4))
 # ───────────── DAY 5 ─────────────
 d5 = []
 d5.append(('cover', f'''
-<div class="kick">DAY 5 · 2026.11.15 (일)</div>
+<div class="kick">2026.11.15 (일)</div>
 <h1>회고, 그리고<br>평가로 고치는 하루</h1>
 <p class="lead">지금까지의 대화와 커밋 기록을 날짜별로 다시 검토해 개발 일지를 정리했습니다. 무엇을 만들었고, 어디서 막혔고, 어떻게 풀었는지를 돌아봅니다. 이어서 평가 모드로 실제 릴스의 정확도를 측정하고, 앱을 닫아도 분석이 끝나고 알림이 오는 구조를 완성했습니다.</p>
 <div class="stat"><div><b>11건</b>GitHub 커밋</div><div><b>v1.7 → v1.9.2</b>버전</div><div><b>29% → 67%</b>평가 정확도</div></div>
@@ -598,6 +601,13 @@ for day, cards in DAYS:
         cid = f'pin_{i:02d}' if day=='pin' else f'd{day}_{i:02d}'
         ids.append(cid)
         out.append(f'<section class="card {cls}" id="{cid}">{head(day, i, n)}{body}</section>')
+out.append('''<script>
+// 카드 아래로 넘치면 t1→t2→t3 순서로 글자·여백을 조금씩 줄인다
+document.querySelectorAll('.card').forEach(c=>{
+  const over=()=>{let m=0;const cr=c.getBoundingClientRect();c.querySelectorAll('*').forEach(e=>{if(e.closest('.phones,.vs,.land,.pin-ph'))return;const r=e.getBoundingClientRect();if(r.height)m=Math.max(m,r.bottom-cr.top)});return m>1300};
+  for(const t of ['t1','t2','t3']){ if(!over()) break; c.classList.add(t); }
+});
+</script>''')
 out.append('</body></html>')
 open(BASE / 'out' / 'cards.html', 'w').write('\n'.join(out))
 open(BASE / 'out' / 'ids.txt', 'w').write('\n'.join(ids))

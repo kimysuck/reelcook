@@ -142,3 +142,51 @@ pre .c{color:#FFB81C}pre .k{color:#FF8A6B}pre .s{color:#9BD28F}
 .pin-ph .ph{width:250px;height:520px;border-radius:36px;border-bottom:8px solid var(--ink);box-shadow:0 20px 40px rgba(43,30,24,.18)}
 .pin-c{position:relative;z-index:2}
 .pin-c span{background:#fff;color:var(--pri);border:2px solid var(--pri)}
+
+/* ── v2: 가독성 개선 + DAY 크게 (2026-11-15) ── */
+.top2{align-items:flex-start;margin-bottom:34px}
+.dayno{display:flex;align-items:baseline;gap:10px;font-weight:900;color:var(--pri);font-size:34px;letter-spacing:1px;line-height:1}
+.dayno b{font-size:92px;letter-spacing:-3px;line-height:.9}
+.pg{display:flex;flex-direction:column;align-items:flex-end;gap:10px;font-size:24px;color:var(--sub);font-weight:600;padding-top:6px}
+.pg .logo{font-size:28px}
+.cover .dayno{color:#fff;font-size:44px}
+.cover .dayno b{font-size:190px;color:var(--yolk);letter-spacing:-8px}
+.cover .pg{color:#FFD9CC}.cover .pg .logo{color:#fff}
+.cover .top2{margin-bottom:10px}
+.cover .kick{margin-top:6px;font-size:32px;color:#fff;opacity:.9}
+.cover h1{font-size:88px;margin:18px 0 28px;line-height:1.12}
+.cover .lead{font-size:29px;line-height:1.65}
+.tag{font-size:27px;margin-bottom:10px}
+h2{font-size:60px;line-height:1.2;margin-bottom:30px;letter-spacing:-2px}
+/* 문제 해결 줄: 라벨을 위로 올려 본문 폭을 넓힌다 */
+.rows{gap:16px}
+.r{display:block;padding:22px 30px 24px;border-radius:22px;background:#F7F1EB}
+.rl{display:inline-block;font-size:22px;padding:3px 14px;border-radius:20px;margin-bottom:8px;background:#fff}
+.rt{font-size:29px;line-height:1.58;font-weight:500;color:var(--ink)}
+.bl{gap:20px}
+.bl li{font-size:29px;line-height:1.58;padding-left:32px;color:var(--ink)}
+.bl li:before{top:17px;width:12px;height:12px}
+.tb{font-size:27px}
+.tb th{font-size:23px}
+.tb td{padding:17px 16px 17px 0}
+.tb2 td:first-child{font-size:22px}
+pre{font-size:22px;line-height:1.7}
+.note{font-size:24px;color:var(--ink2)}
+.lead{font-size:30px;color:var(--ink)}
+.m .p{font-size:24px}.m .f{font-size:27px}.m .f span{font-size:22px}
+.li{font-size:33px}.li span{font-size:26px}
+.next{font-size:28px}
+.stat2 b{font-size:54px}.stat2 div{font-size:23px}
+.phones.short .ph,.ph.short{height:400px}
+.phones{margin-bottom:-60px}
+.ph{width:320px}
+.phones.two .ph{width:330px}
+.cap{font-size:21px}
+/* 내용이 많은 카드는 자동으로 한 단계씩 촘촘하게 (내용은 줄이지 않음) */
+.t1 h2{font-size:54px;margin-bottom:22px}.t1 .top2{margin-bottom:24px}
+.t1 .rows{gap:12px}.t1 .r{padding:16px 26px 18px}.t1 .rl{margin-bottom:5px}
+.t1 .rt{font-size:27px;line-height:1.52}.t1 pre{font-size:20px;padding:24px 30px;margin-top:16px}
+.t1 .tb{font-size:25px}.t1 .tb td{padding:13px 14px 13px 0}.t1 .bl li{font-size:27px}
+.t2 .rt{font-size:25px}.t2 .dayno b{font-size:78px}.t2 h2{font-size:50px}.t2 .tb td{padding:10px 12px 10px 0}.t2 .tb2{margin-bottom:14px}
+.t3 .rt{font-size:24px;line-height:1.48}.t3 .r{padding:13px 24px 15px}.t3 .tb{font-size:23px}
+.cover .bars i:nth-child(3){background:#fff}
