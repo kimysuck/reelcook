@@ -72,3 +72,9 @@
 - `.mcp.json`: Serena(코드 기호 검색·수정), Headroom(긴 출력 압축) MCP 서버. `uvx`로 자동 실행된다.
 - `.claude/settings.json`: Ponytail 플러그인(필요 이상으로 코드를 늘리지 않게 하는 규칙).
 - `.serena/project.yml`: Serena 프로젝트 설정(언어: typescript, JS 포함).
+
+## 개발 일지 (인스타 카드)
+- `devlog/` 에 카드 생성 도구가 있다. 사용법과 규칙은 `devlog/README.md`.
+- 영석님이 "일지 만들어줘"라고 하면: 마지막 일지 이후 커밋을 날짜별로 정리 → `devlog/build.py`에 Day를 추가 → JPG와 캡션 초안 전달.
+- 버전을 올릴 때 커밋 메시지에 "무엇을·왜 고쳤는지"를 구체적으로 남긴다(일지의 근거가 된다).
+- 저장소는 공개다: 실명·가족 이야기·이메일·남의 릴스 장면은 `devlog/private/`(git 제외)에만.
