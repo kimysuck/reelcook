@@ -6,7 +6,7 @@ B='http://localhost:8788'
 def setm(q): urllib.request.urlopen(B+'/__set?'+q).read()
 def st(): return json.load(urllib.request.urlopen(B+'/__st'))
 FAKE=open('fake-supabase2.js').read()
-INIT="if(!localStorage.getItem('rc_consent')){localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'x'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))};localStorage.setItem('rc_splash_at',String(Date.now()))"
+INIT="if(!localStorage.getItem('rc_consent')){localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'x'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))};localStorage.setItem('rc_splash_off','1')"
 def share(pg, code):
     pg.evaluate("""(c)=>{const f=document.createElement('form');f.method='POST';f.action='/share-target';f.enctype='multipart/form-data';
  const t=document.createElement('input');t.name='text';t.value='https://www.instagram.com/reel/'+c+'/';f.appendChild(t);document.body.appendChild(f);f.submit();}""", code)

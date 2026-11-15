@@ -1,6 +1,6 @@
 // 릴쿡 서비스 워커: 오프라인 캐시 + 인스타 "공유" 받기 + 분석 완료 알림
-const VERSION = 'reelcook-v192';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/legal.html', '/icons/icon-192.png', '/icons/icon-512.png'];
+const VERSION = 'reelcook-v110';
+const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/legal.html', '/icons/icon-192.png?v=2', '/icons/icon-512.png?v=2'];
 const INBOX = 'share-inbox';
 
 self.addEventListener('install', e => {
@@ -61,7 +61,7 @@ self.addEventListener('push', e => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     if (!m.test && wins.some(w => w.visibilityState === 'visible')) return;   // 알림 시험은 앱을 보고 있어도 보여 준다
     await self.registration.showNotification(m.title || '레시피가 준비됐어요', {
-      body: m.body || '눌러서 바로 보기', tag: m.tag || 'reelcook', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+      body: m.body || '눌러서 바로 보기', tag: m.tag || 'reelcook', icon: '/icons/icon-192.png?v=2', badge: '/icons/icon-192.png?v=2',
       data: { url: m.url || '/' },
     });
   })());
