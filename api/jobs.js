@@ -7,7 +7,7 @@ import { run, recordFailure } from './analyze.js';
 import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
-import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, jobBase, STALE_MS, PAR, cleanupJobs } from '../lib/jobs.js';
+import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
 const MAX_OPEN = 25;   // 한 기기에서 동시에 맡길 수 있는 작업 수(평가 모드 20개 + 여유)
@@ -40,8 +40,12 @@ async function step(id) {
 export default async function handler(req, res) {
   const pass = process.env.APP_PASSCODE;
   if (pass && req.headers['x-app-passcode'] !== pass) return res.status(401).json({ error: 'passcode' });
-  if (!jobsReady() || !jobBase()) return res.status(501).json({ error: 'no_jobs' });   // 앱은 예전 방식(직접 분석)으로 한다
+  if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' });   // 앱은 예전 방식(직접 분석)으로 한다
   const q = req.query || {};
+
+  // 점검(설정 > AI 사용량): 작업 표·자기 호출이 되는지
+  if (q.diag) return res.status(200).json(await diagnose());
+  if (q.ping) return res.status(req.headers['x-job-key'] === jobKey() ? 200 : 403).json({ ok: req.headers['x-job-key'] === jobKey() });
 
   // 서버끼리: 한 단계 실행 (끝까지 실행한 뒤 응답 — 응답 뒤에는 서버가 멈출 수 있어서)
   if (q.step) {
