@@ -17,9 +17,13 @@ async function step(id) {
   if (!job || job.status === 'done' || job.status === 'failed') return 'skip';
   if (job.status === 'queued' && await countActive(job.owner) >= PAR) return 'wait';   // 빈자리가 나면 kickNext가 다시 부른다
   const mine = await claimJob(id); if (!mine) return 'taken';
+  // 실제 분석 시간(차례 기다림·앱을 닫아 둔 시간 제외)을 재기 위해 처음 시작한 시각을 남긴다
+  const started = (job.body && job.body.startedAt) || Date.now();
+  if (!(job.body && job.body.startedAt)) await patchJob(id, { body: { ...(job.body || {}), startedAt: started } });
   const t0 = Date.now(); let last = null, chain = Promise.resolve();
   const emit = ev => { if (ev && ev.stage && ev.stage !== last && ev.stage !== 'start') { last = ev.stage; chain = chain.then(() => patchJob(id, { stage: ev.stage })); } };
-  const body = { ...(job.body || {}), stream: false };
+  const { startedAt: _s, ...b0 } = job.body || {};
+  const body = { ...b0, stream: false };
   if (job.state) { delete body.report; Object.assign(body, { resume: job.state, hop: job.hop, fetched: true, noCache: true }); }
   let out;
   try { out = await run(body, emit, t0, null, { who: job.who, tester: job.tester }); }
@@ -32,7 +36,8 @@ async function step(id) {
     return 'continue';
   }
   await recordFailure(body, out, t0);
-  await patchJob(id, { status: out.status === 200 ? 'done' : 'failed', stage: 'done', state: null, result: { status: out.status, ...out.json } });
+  const sec = Math.round((Date.now() - started) / 1000), wait = Math.max(0, Math.round((started - Date.parse(job.created_at)) / 1000));
+  await patchJob(id, { status: out.status === 200 ? 'done' : 'failed', stage: 'done', state: null, result: { status: out.status, ...out.json, sec, wait } });
   await kickNext(job.owner);
   return 'done';
 }

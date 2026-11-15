@@ -59,6 +59,8 @@ with sync_playwright() as p:
     pg.click('#setBtn'); pg.click('#evalBtn')
     pg.wait_for_function("document.querySelector('.evsum') && document.querySelector('.evsum').innerText.startsWith('3/3')", timeout=20000)
     print('다시 열자 평가:', pg.inner_text('.evsum'))
+    secs=pg.evaluate("JSON.parse(localStorage.getItem('rc_eval')).items.map(x=>[x.sec,x.wait])"); print('서버가 잰 분석 시간·기다림', secs)
+    assert all(a is not None and a<30 for a,w in secs) and all(w is not None for a,w in secs), 'server-measured time missing'
 
     # 3) 설정 > AI 사용량의 서버 분석 점검: 정상
     pg.click('#setBtn'); pg.click('#usageBtn'); pg.wait_for_function("document.querySelector('#jdiag') && !document.querySelector('#jdiag').innerText.includes('확인하는')", timeout=15000)

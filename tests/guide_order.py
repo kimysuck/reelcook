@@ -27,4 +27,15 @@ with sync_playwright() as p:
         pg.evaluate(f"PL.v.currentTime={t}; PL.v.dispatchEvent(new Event('timeupdate'))"); pg.wait_for_timeout(60)
         print(' manual 4단계 at', t, '->', pg.inner_text('#plc'))
     pg.evaluate("PL.v.currentTime=17; PL.v.dispatchEvent(new Event('timeupdate'))"); pg.wait_for_timeout(60); print(' after its clip ->', pg.inner_text('#plc'))
+    # 영상에 장면이 없는 단계(평가 2회차 10번: 5단계부터 앞 단계로 되돌아감) → 고른 단계에 머문다
+    pg.evaluate("S.recipe.steps[4].clip=null; S.recipe.steps[3].clip={start:999,end:1003}; closePlayer(true); openPlayer(0)"); pg.wait_for_timeout(800); pg.evaluate("PL.v.pause()")
+    print(' 영상 길이', round(pg.evaluate('PL.dur'),1), '시간표', pg.evaluate('PL.tl.map(e=>e.i+1)'))
+    assert 4 not in pg.evaluate('PL.tl.map(e=>e.i+1)'), 'clip beyond video length kept in timeline'
+    pg.evaluate("gotoStep(4)"); pg.wait_for_timeout(100)
+    for t in [13,15.5,18.5]:
+        pg.evaluate(f"PL.v.currentTime={t}; PL.v.dispatchEvent(new Event('timeupdate'))"); pg.wait_for_timeout(60)
+        print(' 장면 없는 5단계 at', t, '->', pg.inner_text('#plc')); assert pg.inner_text('#plc').startswith('5 /'), 'jumped away from step without scene'
+    assert '영상에 없는 단계' in pg.inner_text('#plg') and pg.evaluate('PL.v.paused'), 'no notice / video not paused'
+    pg.evaluate("gotoStep(3)"); pg.wait_for_timeout(100); assert pg.inner_text('#plc').startswith('4 /') and '영상에 없는 단계' in pg.inner_text('#plg'), 'clip past end not treated as missing'
+    pg.click('#pln'); pg.wait_for_timeout(100); assert pg.inner_text('#plc').startswith('5 /'), 'next button stuck'
     print('errors', errs)

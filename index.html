@@ -502,7 +502,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.8.1';
+const VERSION='v1.8.2';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -1407,7 +1407,7 @@ async function evOne(x){
     const d=canJob() ? await jobAnalyze(body, onEv, x.job||null, {eval:true}) : await analyzeReq(body, onEv);
     if (d.error==='cancelled'||d.error==='job_lost'||d.error==='jobs_failed'){ Object.assign(x,{status:'wait', err:'', stage:'', job:null}); delete x.t0; delete x.live; evSave(); evDraw(); return; }
     if (d.error==='__net') throw new Error('__net');
-    x.job=null;
+    x.job=null; if (d.sec!=null){ x.sec=d.sec; x.wait=d.wait||0; }   // 서버가 잰 실제 분석 시간(차례 기다림 제외)
     x.sec=Math.round((Date.now()-x.t0)/1000);
     if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=[ERR[d.error]||d.error||d.status, ...(d.notes||[])].join(' · ').slice(0,300);
       if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; if (!evStop) toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); evStop=true; } }
@@ -1436,7 +1436,7 @@ function evSummary(){
   const it=S.ev.items, s=evStats(), done=it.filter(x=>x.status==='ok');
   const tally=(xs)=>`${xs.length}개 → ✓${xs.filter(x=>x.mark==='ok').length} ✗${xs.filter(x=>x.mark==='ng').length}${xs.some(x=>!x.mark)?` 미평가${xs.filter(x=>!x.mark).length}`:''}`;
   const out=[`[릴쿡 평가 결과] ${new Date(S.ev.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})} · ${VERSION} · ${S.ev.round>1?`${S.ev.round}회차`:'1회차'}${S.ev.fresh?' · 새로 분석':' · 저장된 분석 포함'}`,
-    `분석 ${it.length}개: 성공 ${done.length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}${done.length?` · 평균 ${Math.round(done.reduce((a,x)=>a+(x.sec||0),0)/done.length)}초`:''}`,
+    `분석 ${it.length}개: 성공 ${done.length} · 실패 ${it.filter(x=>x.status==='fail').length} · 안 함 ${it.filter(x=>x.status==='wait'||x.status==='run').length}${done.length?` · 평균 분석 ${Math.round(done.reduce((a,x)=>a+(x.sec||0),0)/done.length)}초`:''}${done.some(x=>x.wait)?` (차례 기다림 평균 ${Math.round(done.reduce((a,x)=>a+(x.wait||0),0)/done.length)}초 별도)`:''}`,
     `평가: ✓ ${s.ok} · ✗ ${s.ng} · 미평가 ${done.filter(x=>!x.mark).length}${s.rate!=null?` (맞은 비율 ${s.rate}%)`:''}${S.ev.prev&&S.ev.prev.rate!=null?` · 지난번 ${S.ev.prev.rate}%`:''}`];
   const withInfo=done.filter(x=>x.info);
   if (withInfo.length){
@@ -2120,11 +2120,13 @@ function firstClip(){ const k=S.recipe.steps.findIndex(st=>st.clip); return k<0?
 function timeline(){ const out=[]; let last=-1; S.recipe.steps.forEach((x,i)=>{ if (x.clip && x.clip.start>=last+0.5){ out.push({i, start:x.clip.start}); last=x.clip.start; } }); return out; }
 // t초에 해당하는 단계: 시작 시각이 지난 마지막 단계. 첫 장면 전(오프닝)이면 -1
 function stepAt(t){ let k=-1; for (const e of PL.tl) { if (e.start-0.3<=t) k=e.i; else break; } return k; }
+// 장면 시각이 있고 영상 길이 안에 있는 단계만 "영상에 있는 단계"로 본다 (AI가 영상보다 긴 시각을 적는 경우 대비)
+const clipOK=x=>!!(x && x.clip && !(PL.dur && x.clip.start>=PL.dur-0.3));
 function openPlayer(i){
   const src=videoSrc(); if (!src && !mediaLoading()){ toast('이 레시피에는 볼 수 있는 영상이 없어요'); return; }
   closePlayer(true);
   if (playing) stopScene(playing);
-  PL.i=Math.max(0, i|0); PL.loop=false; PL.guide=true; PL.tl=timeline(); PL.opening=false; PL.hold=null;
+  PL.i=Math.max(0, i|0); PL.loop=false; PL.guide=true; PL.tl=timeline(); PL.opening=false; PL.hold=null; PL.dur=0;
   const el=document.createElement('div'); el.id='player'; el.setAttribute('role','dialog'); el.setAttribute('aria-label','영상 가이드');
   el.innerHTML=`<video playsinline preload="auto"></video>
     <div class="pl-top"><button id="plx" aria-label="닫기">${IC.x}</button><span id="plc"></span><button id="plm" aria-label="소리 끄기">${IC.sound}</button></div>
@@ -2136,12 +2138,13 @@ function openPlayer(i){
   if (src) v.src=src; else waitMedia();
   v.addEventListener('error',()=>{ $('#plc').textContent='영상을 재생하지 못했어요'; });
   const startAt=()=>{ const st=S.recipe.steps[PL.i]; return st&&st.clip ? Math.max(0, st.clip.start-0.3) : st&&st.photo!=null ? Math.max(0, st.photo-2) : 0; };
+  v.addEventListener('loadedmetadata',()=>{ if (isFinite(v.duration)){ PL.dur=v.duration; PL.tl=PL.tl.filter(e=>e.start<PL.dur-0.3); drawGuide(); } },{once:true});
   v.addEventListener('loadedmetadata',()=>{ v.currentTime=startAt(); v.play().catch(()=>{ v.muted=true; syncMute(); v.play().catch(()=>{}); }); },{once:true});
   v.addEventListener('timeupdate',()=>{
     const st=S.recipe.steps[PL.i], t=v.currentTime;
     if (PL.loop && st && st.clip){ if (t>st.clip.end+0.5 || t<st.clip.start-1) v.currentTime=Math.max(0,st.clip.start-0.3); return; }
-    // 직접 고른 단계는 그 장면이 끝날 때까지 자동 전환하지 않는다
-    if (PL.hold){ if (t>=PL.hold.a-1 && t<=PL.hold.b+0.5) return; PL.hold=null; }
+    // 직접 고른 단계는 그 장면이 끝날 때까지 자동 전환하지 않는다. 영상에 없는 단계를 고르면 다른 단계로 넘어갈 때까지 그대로 둔다
+    if (PL.hold){ if (PL.hold.manual) return; if (t>=PL.hold.a-1 && t<=PL.hold.b+0.5) return; PL.hold=null; }
     const k=stepAt(t);
     if (k<0){ const first=PL.tl.length?PL.tl[0].i:0; if (!PL.opening || PL.i!==first){ PL.opening=true; PL.i=first; drawGuide(); } return; }
     if (PL.opening || k!==PL.i){ PL.opening=false; PL.i=k; drawGuide(); }
@@ -2153,7 +2156,7 @@ function openPlayer(i){
   v.addEventListener('play',()=>el.classList.remove('paused')); v.addEventListener('pause',()=>el.classList.add('paused'));
   $('#plx').onclick=()=>closePlayer();
   $('#plm').onclick=()=>{ v.muted=!v.muted; syncMute(); };
-  $('#pltap').onclick=()=>{ if (v.paused) v.play().catch(()=>{}); else v.pause(); };
+  $('#pltap').onclick=()=>{ if (v.paused){ if (PL.hold&&PL.hold.manual) PL.hold=null; v.play().catch(()=>{}); } else v.pause(); };   // 직접 재생하면 다시 영상을 따라간다
   { const x=S.recipe.steps[PL.i]; PL.hold = x && x.clip ? {a:x.clip.start, b:x.clip.end} : null; }
   setAwake(true); drawGuide();
   function waitMedia(){ const iv=setInterval(()=>{ if (!document.getElementById('player')){ clearInterval(iv); return; }
@@ -2163,14 +2166,16 @@ function openPlayer(i){
 }
 function syncMute(){ const b=$('#plm'); if(!b||!PL.v) return; b.innerHTML=PL.v.muted?IC.mute:IC.sound; b.setAttribute('aria-label',PL.v.muted?'소리 켜기':'소리 끄기'); }
 function gotoStep(i){ const st=S.recipe.steps, v=PL.v; if (i<0||i>=st.length) return; PL.i=i; PL.opening=false;
-  const x=st[i]; PL.hold = x.clip ? {a:x.clip.start, b:x.clip.end} : null; drawGuide();
-  if (v && (x.clip||x.photo!=null)){ v.currentTime=Math.max(0, x.clip?x.clip.start-0.3:x.photo-2); v.play().catch(()=>{}); } }
+  const x=st[i];
+  if (clipOK(x)){ PL.hold={a:x.clip.start, b:x.clip.end}; drawGuide(); if (v){ v.currentTime=Math.max(0, x.clip.start-0.3); v.play().catch(()=>{}); } return; }
+  // 영상에 장면이 없는 단계: 앞 단계로 되돌아가지 않게 붙잡고, 영상은 멈춘다
+  PL.hold={manual:true}; drawGuide(); if (v) v.pause(); }
 function drawGuide(){
   const g=$('#plg'); if(!g) return; const r=S.recipe, n=r.steps.length, i=PL.i, s=r.steps[i];
   $('#plc').textContent=PL.opening?'오프닝':`${i+1} / ${n}단계`;
   g.className='pl-guide'+(PL.guide?'':' min');
   g.innerHTML=`<button class="pl-handle" id="plh" aria-label="${PL.guide?'안내 접기':'안내 펴기'}"><i></i></button>
-    <div class="pl-sn"><span class="disp">${i+1}</span>${PL.opening?'<span class="pl-soon">곧 시작</span>':''}${heatHTML(s.heat)}${s.clip?'':'<span class="muted" style="color:#C9B8AC">영상에 없는 단계</span>'}</div>
+    <div class="pl-sn"><span class="disp">${i+1}</span>${PL.opening?'<span class="pl-soon">곧 시작</span>':''}${heatHTML(s.heat)}${clipOK(s)?'':'<span class="muted" style="color:#C9B8AC">영상에 없는 단계</span>'}</div>
     <div class="pl-st">${stepHTML(s.text)}</div>
     ${PL.guide&&s.cue?`<div class="cue"><span>${esc(s.cue)}</span></div>`:''}
     ${PL.guide&&s.tip?`<div class="tip"><span>${esc(s.tip)}</span></div>`:''}
