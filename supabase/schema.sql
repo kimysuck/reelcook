@@ -226,3 +226,8 @@ create extension if not exists pg_cron;
 select cron.unschedule(jobid) from cron.job where jobname = 'reelcook-sweep';
 select cron.schedule('reelcook-sweep', '* * * * *',
   $$ select net.http_post(url := 'https://reelcook.vercel.app/api/jobs?sweep=1', body := '{}'::jsonb, headers := '{"Content-Type":"application/json"}'::jsonb) $$);
+
+-- 2026-11-15 보안·성능 점검 반영 (update-2026-11-15-security.sql)
+revoke execute on function public.handle_new_user() from anon, authenticated, public;
+create index if not exists likes_user_id_idx on public.likes (user_id);
+create index if not exists posts_user_id_idx on public.posts (user_id);
