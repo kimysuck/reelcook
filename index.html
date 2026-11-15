@@ -472,6 +472,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 .evlist{margin-top:14px}.evi{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:10px}.evi.ok{border-color:var(--herb)}.evi.ng{border-color:var(--hot)}
 .evh{display:flex;gap:8px;align-items:center;font-size:.84rem}.evh .no{font-weight:700}.evh .cd{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sub)}
 .evt{font-weight:700;margin-top:6px}.evd{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--line2);font-size:.8rem;color:var(--ink2);line-height:1.55}.evd .bad{color:var(--hot);font-weight:700}
+.note.bg{display:flex;gap:8px;align-items:flex-start;font-size:.86rem}.note.bg .ic{flex:none;color:var(--herb)}
 .evwhy{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.evwhy button{border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.84rem}.evwhy button.on{background:var(--hot);border-color:var(--hot);color:#fff;font-weight:700}
 .evhow{margin-top:8px;padding-left:1.2em;font-size:.86rem}#evAgain{display:inline-flex;gap:6px;align-items:center}.evb{gap:6px;margin-top:10px}.evb .mk{flex:1;min-height:42px;border:1.5px solid var(--line);border-radius:10px;font-weight:700}
 .evb .mk.on{background:var(--herb);border-color:var(--herb);color:#fff}.evb .mk.ng.on{background:var(--hot);border-color:var(--hot)}.evi input{margin-top:8px}
@@ -501,7 +502,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.7.1';
+const VERSION='v1.8';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -815,18 +816,71 @@ async function analyzeReq(body, onEvent){
     b={...rest, resume:d.resume, hop:d.hop, fetched:true, noCache:true};
   }
 }
+/* ---------- 서버 분석 작업: 앱을 꺼도 서버가 끝까지 분석한다 ----------
+   작업을 맡기고(POST /api/jobs) 주기적으로 상태를 확인한다. 앱이 꺼졌다 켜지면 기억해 둔 작업 번호로 결과를 받아 온다.
+   서버에 작업 표가 아직 없으면(SQL 실행 전) 예전 방식(직접 분석)으로 한다. */
+const DEVICE=(()=>{ let d=LS.get('rc_device',''); if(!/^[0-9a-f]{32}$/.test(d)){ d=[...crypto.getRandomValues(new Uint8Array(16))].map(x=>x.toString(16).padStart(2,'0')).join(''); LS.set('rc_device',d); } return d; })();
+let jobsOff=false, jobsKnown=false;
+async function probeJobs(){ if (jobsOff||jobsKnown) return; try{ const r=await fetch('/api/jobs?ids=',{headers:await jobHeaders()}); if (r.status===501) jobsOff=true; jobsKnown=true; }catch(e){} }
+async function jobHeaders(){
+  let tok=null; try{ if (sb && S.user){ const {data}=await sb.auth.getSession(); tok=data.session&&data.session.access_token; } }catch(e){}
+  return {...(S.pass?{'x-app-passcode':S.pass}:{}), 'x-device':DEVICE, ...(tok?{Authorization:'Bearer '+tok}:{})};
+}
+const JOBS={ watch:new Map(), timer:null, misses:0,
+  // 지켜보는 작업 전부를 한 번의 요청으로 확인한다(평가 모드 20개도 2.5초에 한 번)
+  async poll(){ this.timer=null; const ids=[...this.watch.keys()]; if (!ids.length) return;
+    try{ const r=await fetch('/api/jobs?ids='+ids.join(','),{headers:await jobHeaders()}); const d=await r.json(); if (!r.ok) throw new Error(d.error||r.status); this.misses=0;
+      for (const j of d.jobs||[]){ const w=this.watch.get(j.id); if (w) w(j); }
+      for (const id of d.missing||[]){ const w=this.watch.get(id); if (w) w({id, status:'missing'}); }
+    }catch(e){ if (++this.misses>=40){ for (const [id,w] of this.watch) w({id, status:'neterr'}); this.misses=0; } }   // 잠깐 끊긴 건 계속 기다린다
+    this.schedule(2500); },
+  schedule(ms){ if (!this.timer && this.watch.size) this.timer=setTimeout(()=>this.poll(), ms); },
+  on(id, fn){ this.watch.set(id, fn); this.schedule(1000); },
+  off(id){ this.watch.delete(id); },
+  async drop(ids){ try{ await fetch('/api/jobs?ids='+ids.join(','),{method:'DELETE', headers:await jobHeaders()}); }catch(e){} },
+};
+// 앱이 다시 보이면 바로 확인 (꺼져 있는 동안 끝난 작업)
+document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='visible' && JOBS.watch.size){ clearTimeout(JOBS.timer); JOBS.timer=null; JOBS.schedule(100); } });
+// 결과는 streamAnalyze와 같은 모양({status, error, text, source, …})으로 돌려준다
+async function jobAnalyze(body, onEvent, knownId=null, extra={}){
+  let id=knownId;
+  if (!id){
+    const r=await fetch('/api/jobs',{method:'POST', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({...body, ...extra})});
+    const d=await r.json().catch(()=>({}));
+    if (r.status===501 || d.error==='no_jobs'){ jobsOff=true; return analyzeReq(body, onEvent); }
+    if (!r.ok || !d.id) return {status:r.status, error:d.error||'server'};
+    id=d.id;
+  }
+  onEvent({stage:'job', id});
+  return new Promise(res=>{ let last='';
+    JOBS.on(id, j=>{
+      if (j.status==='missing'){ JOBS.off(id); return res({status:404, error:'job_lost'}); }
+      if (j.status==='neterr'){ JOBS.off(id); return res({status:0, error:'__net'}); }
+      if (j.status==='cancel'){ JOBS.off(id); return res({status:0, error:'cancelled'}); }
+      const st=j.status==='queued'&&!j.hop&&(!j.stage||j.stage==='queued')?'queued':j.stage;
+      if (st && st!==last){ last=st; onEvent({stage:st, hop:j.hop}); }
+      if (j.status==='done'||j.status==='failed'){ JOBS.off(id); JOBS.drop([id]); res(j.result||{status:500, error:'server'}); }
+    });
+  });
+}
+const canJob=()=>!jobsOff;
 async function analyze(opts={}){
   const igLink=/instagram\.com\/.*(reel|reels|p|tv)\//i.test(S.link);
   if (!S.caption.trim() && !S.images.length && !igLink){ S.error='릴스 링크를 넣거나, 캡션·사진·영상을 넣어 주세요.'; render(); return; }
+  const pend=LS.get('rc_job',null);   // 같은 릴스를 서버가 아직 분석 중이면 새로 맡기지 않고 그 결과를 기다린다
+  if (!opts.jobId && pend && pend.id && pend.link===S.link.trim() && Date.now()-pend.at<86400e3){ opts={...opts, jobId:pend.id, t0:pend.at, replaceId:opts.replaceId||pend.replaceId}; }
   S.replaceId=opts.replaceId||null;
-  S.busy=true; S.error=''; S.errCode=''; S.canRetry=false; S.shareNote=''; S.t0=S.t0&&S.phase==='frames'?S.t0:Date.now(); S.fetched=null; S.note2='';
+  S.busy=true; S.error=''; S.errCode=''; S.canRetry=false; S.shareNote=''; S.t0=opts.t0||(S.t0&&S.phase==='frames'?S.t0:Date.now()); S.fetched=null; S.note2=''; S.jobId=null;
   S.phase = igLink && !S.images.length ? 'fetch' : 'analyze'; render();
   clearInterval(tick); tick=setInterval(()=>{ const el=$('#elapsed'); if(el) el.textContent=`${Math.round((Date.now()-S.t0)/1000)}초`; },1000);
   try{
     const body={caption:S.caption.trim(), link:S.link.trim(), fromVideo:S.fromVideo, noCache:!!opts.noCache, ...(opts.report?{report:opts.report}:{})};
     if (S.images.length){ body.images=[]; for (const x of S.images) body.images.push({mime:'image/jpeg', data: await blobToB64(x.blob)}); }
-    const data=await analyzeReq(body, ev=>{
-      if (ev.stage==='cached'){ S.phase='cached'; render(); }
+    const useJob=canJob() && igLink && !S.images.length;
+    const onEv=ev=>{
+      if (ev.stage==='job'){ S.jobId=ev.id; LS.set('rc_job',{id:ev.id, link:S.link.trim(), replaceId:S.replaceId||null, at:S.t0}); render(); }
+      else if (ev.stage==='queued'){ S.phase='queued'; render(); }
+      else if (ev.stage==='cached'){ S.phase='cached'; render(); }
       else if (ev.stage==='fetch'){ S.phase='fetch'; render(); }
       else if (ev.stage==='fetched'){ S.fetched={caption:ev.caption, comments:ev.comments, videoUrl:ev.videoUrl, duration:ev.duration}; if (ev.videoSrc) prefetchReel(ev.videoSrc); render(); }
       else if (ev.stage==='download'){ S.phase='download'; render(); }
@@ -838,7 +892,11 @@ async function analyze(opts={}){
       else if (ev.stage==='compose'){ S.phase='compose'; S.scenes=ev.scenes; S.note2=''; render(); }
       else if (ev.stage==='continue'){ S.note2=`영상을 꼼꼼히 보느라 시간이 더 걸려서 이어서 분석하는 중이에요 (${ev.hop+1}번째)`; render(); }
       else if (ev.stage==='retry'){ S.note2='레시피를 확실히 찾지 못해서 영상 자막과 음성까지 더 꼼꼼하게 다시 보는 중…'; render(); }
-    });
+    };
+    const data = useJob ? await jobAnalyze(body, onEv, opts.jobId||null) : await analyzeReq(body, onEv);
+    LS.set('rc_job', null); S.jobId=null;
+    if (data.error==='__net') throw new TypeError('network');
+    if (data.error==='job_lost') throw new Error('분석 작업 기록을 찾지 못했어요(3일이 지났거나 이미 받아 갔어요). 다시 시도해 주세요.');
     S.errCode = data.error ? [data.error, ...(data.notes||[])].filter(Boolean).join(' · ').slice(0,200) : '';
     if (data.error || (data.status && data.status!==200)){
       if (data.error==='need_input'){ S.shareNote='link'; throw new Error('서버가 이 릴스의 영상을 받지 못했어요. 비공개 계정이거나 인스타가 잠시 막은 경우예요. 아래 방법처럼 영상을 저장해서 공유하면 분석할 수 있어요.'); }
@@ -870,6 +928,7 @@ async function analyze(opts={}){
     else if (data.left!=null && data.left<=5) toast(`오늘 남은 분석 ${data.left}회`);
   }catch(e){
     const net = e instanceof TypeError || e.message==='__cut' || /fetch|network|load failed/i.test(e.message);
+    if (!net){ LS.set('rc_job', null); } S.jobId=null;   // 인터넷이 끊긴 거면 작업 번호를 남겨 둔다 → 다시 시도·다시 열 때 결과를 받아 옴
     if (net){ S.canRetry=true; S.error='인터넷 연결이 중간에 끊겼어요. 와이파이·데이터 상태를 확인하고 다시 시도해 주세요.'; }
     else S.error = e.message && !/JSON|Unexpected/.test(e.message) ? e.message : '레시피를 정리하지 못했어요. 한 번만 다시 시도해 주세요.';
     S.busy=false; clearInterval(tick); S.t0=0; render();
@@ -895,7 +954,8 @@ const standalone=()=>matchMedia('(display-mode: standalone)').matches;
 
 function viewProgress(){
   const f=S.fetched, sec=Math.round((Date.now()-S.t0)/1000);
-  const title = S.phase==='frames' ? '영상에서 장면을 고르는 중'
+  const title = S.phase==='queued' ? '앞의 분석이 끝나길 기다리는 중'
+    : S.phase==='frames' ? '영상에서 장면을 고르는 중'
     : S.phase==='cached' ? '이미 정리된 릴스예요. 바로 불러올게요'
     : S.phase==='fetch' ? '릴스를 가져오는 중'
     : S.phase==='download' ? '영상을 받는 중'
@@ -918,6 +978,7 @@ function viewProgress(){
     <div class="prog-title">${title}</div>
     <div class="prog-time"><span id="elapsed">${sec}초</span> 지남, ${hint}</div>
     ${S.note2?`<div class="note" style="margin-top:14px">${esc(S.note2)}</div>`:''}
+    ${S.jobId?`<div class="note bg" style="margin-top:14px">${IC.check}앱을 닫아도 분석은 서버에서 계속돼요. 다시 열면 결과가 바로 나와요.</div>`:''}
     ${checks}
     <p class="muted" style="margin-top:22px;font-size:.82rem">분석하는 동안 화면이 꺼지지 않아요.</p>
   </div>`;
@@ -1233,7 +1294,7 @@ const EV_MAX=20;
 const EV_WHY=[['amount','분량'],['missing_ing','재료 빠짐·틀림'],['steps','순서·방법'],['wrong_dish','다른 요리'],['missing_recipe','레시피 누락'],['other','기타']];
 const EV_TYPE={caption:'캡션·작성자 댓글에 레시피', subs:'자막·음성에 레시피', video:'영상 장면만'};
 const EV_SRC={caption:'캡션', owner_comment:'작성자 댓글', viewer_comment:'시청자 댓글', onscreen_text:'자막', speech:'음성', visual:'화면 추정'};
-S.ev=LS.get('rc_eval',null); if (S.ev) S.ev.items.forEach(x=>{ if (x.status==='run') x.status='wait'; });
+S.ev=LS.get('rc_eval',null); if (S.ev) S.ev.items.forEach(x=>{ delete x.live; if (x.status==='run' && !x.job) x.status='wait'; });   // 서버 작업이 있으면 그대로 두고 결과를 받아 온다
 let evStop=false, evRunning=false;
 function evSave(){ if (S.ev && !LS.set('rc_eval', S.ev)){ const lite={...S.ev, items:S.ev.items.map(x=>({...x, recipes:null}))}; LS.set('rc_eval', lite); } }
 function evDraw(){ if (S.tab==='eval' && !S.recipe && !S.cooking && !$('#layer').innerHTML.trim()){ const y=window.scrollY; render(); window.scrollTo(0,y); } }
@@ -1271,7 +1332,7 @@ function viewEval(){
     <ol class="muted evhow"><li>결과를 보고 ✓ 맞음 / ✗ 틀림을 골라요. 틀렸으면 이유도 골라요.</li><li>"결과 요약 복사"를 눌러 Claude에게 붙여 넣어요.</li><li>고친 뒤 같은 링크로 다시 돌려 맞은 비율을 비교해요.</li></ol>
     <textarea id="evIn" style="min-height:200px;margin-top:14px" placeholder="https://www.instagram.com/reel/...&#10;https://www.instagram.com/reel/..."></textarea>
     <label class="chk"><input type="checkbox" id="evFresh" checked> 저장된 분석을 쓰지 않고 새로 분석 (고친 뒤 비교할 때 필요)</label>
-    <p class="muted" style="font-size:.8rem;margin-top:8px">2개씩 동시에 분석해요. 릴스 하나에 보통 30초~2분 걸리고, 분석하는 동안 화면은 켜진 채로 있어요. 다른 앱으로 나가면 멈출 수 있어요. 평가 기록은 이 폰에만 저장돼요.</p>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">서버가 2개씩 차례로 분석해요. 릴스 하나에 보통 30초~2분 걸리고, 앱을 닫아도 서버에서 계속돼요. 다시 열면 끝난 결과가 채워져요. 평가 기록은 이 폰에만 저장돼요.</p>
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
@@ -1298,7 +1359,10 @@ function bindEval(){
     if (links.length>EV_MAX) toast(`앞의 ${EV_MAX}개만 분석해요`);
     S.ev={at:Date.now(), fresh:$('#evFresh').checked, round:1, items:links.slice(0,EV_MAX).map(link=>({link, status:'wait', mark:'', why:[], memo:''}))}; evSave(); runEval(); };
   const rn=$('#evRun'); if (rn) rn.onclick=runEval;
-  const sp=$('#evStop'); if (sp) sp.onclick=()=>{ evStop=true; toast('지금 분석 중인 것까지만 하고 멈춰요'); };
+  const sp=$('#evStop'); if (sp) sp.onclick=()=>{ evStop=true;
+    const ids=S.ev.items.filter(x=>x.status==='run'&&x.job).map(x=>x.job);   // 서버에 맡긴 작업도 취소
+    if (ids.length){ JOBS.drop(ids); ids.forEach(id=>{ const w=JOBS.watch.get(id); if (w) w({id, status:'cancel'}); }); }
+    toast('분석을 멈췄어요. "이어서 분석"으로 다시 시작할 수 있어요'); };
   const nw=$('#evNew'); if (nw) nw.onclick=()=>confirmBox('평가 기록을 지우고 새로 시작할까요?', ()=>{ S.ev=null; LS.set('rc_eval',null); render(); }, '새로 시작');
   const ag=$('#evAgain'); if (ag) ag.onclick=()=>confirmBox('같은 링크를 새로 분석할까요? 이번 결과는 요약에 "지난번"으로 남아요.', ()=>{
     const prev=evStats(); S.ev={at:Date.now(), fresh:true, round:(S.ev.round||1)+1, prev, items:S.ev.items.map(x=>({link:x.link, status:'wait', mark:'', why:[], memo:'', prevMark:x.mark||''}))}; evSave(); runEval(); }, '다시 분석');
@@ -1312,13 +1376,17 @@ function bindEval(){
 }
 // 2개씩 동시에 분석한다(무료 AI 한도가 차면 서버가 다른 모델로 넘기거나 잠깐 기다린다). 평가 중에는 화면이 꺼지지 않게 한다.
 const EV_PAR=2;
-const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기', continue:'시간이 더 걸려 이어서 분석 중'};
+const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기', continue:'시간이 더 걸려 이어서 분석 중', queued:'차례 기다리는 중', done:'결과 받는 중'};
 let evTick=null;
 function evTickUI(){ document.querySelectorAll('[data-evrun]').forEach(el=>{ const x=S.ev&&S.ev.items[+el.dataset.evrun]; if (x&&x.status==='run'&&x.t0) el.textContent=`${EV_STAGE[x.stage]||'분석 중'} · ${Math.round((Date.now()-x.t0)/1000)}초`; }); }
 async function evOne(x){
-  x.status='run'; x.stage='start'; x.t0=Date.now(); evDraw();
+  x.live=true; if (!(x.status==='run' && x.job)){ x.status='run'; x.stage='start'; x.t0=Date.now(); } evDraw();
   try{
-    const d=await analyzeReq({caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, ev=>{ if (ev.stage){ x.stage=ev.stage; evTickUI(); } });
+    const body={caption:'', link:x.link, fromVideo:false, noCache:!!S.ev.fresh}, onEv=ev=>{ if (ev.stage==='job'){ if (x.job!==ev.id){ x.job=ev.id; evSave(); } return; } if (ev.stage){ x.stage=ev.stage; evTickUI(); } };
+    const d=canJob() ? await jobAnalyze(body, onEv, x.job||null, {eval:true}) : await analyzeReq(body, onEv);
+    if (d.error==='cancelled'||d.error==='job_lost'){ Object.assign(x,{status:'wait', err:'', stage:'', job:null}); delete x.t0; delete x.live; evSave(); evDraw(); return; }
+    if (d.error==='__net') throw new TypeError('net');
+    x.job=null;
     x.sec=Math.round((Date.now()-x.t0)/1000);
     if (d.error || (d.status && d.status!==200)){ x.status='fail'; x.err=[ERR[d.error]||d.error||d.status, ...(d.notes||[])].join(' · ').slice(0,300);
       if (d.error==='daily_limit'||d.error==='quota_day'){ x.status='wait'; x.err=''; if (!evStop) toast(d.error==='daily_limit'?'오늘 분석 횟수를 다 써서 멈췄어요':'AI 하루 무료 한도가 끝나서 멈췄어요'); evStop=true; } }
@@ -1328,15 +1396,17 @@ async function evOne(x){
         const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
         Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
           info:evInfo(d,res,list), recipes:list.map(r=>({...r, source:base}))}); } }
-  }catch(e){ x.status='wait'; x.err=''; x.stage=''; evStop=true; toast('인터넷 연결이 끊겨서 멈췄어요. "이어서 분석"을 눌러 주세요'); }
-  delete x.t0; evSave(); evDraw();
+  }catch(e){ if (!x.job){ x.status='wait'; x.err=''; x.stage=''; } evStop=true; toast(x.job?'인터넷 연결이 끊겼어요. 분석은 서버에서 계속되니, 연결되면 평가 모드를 다시 열어 주세요':'인터넷 연결이 끊겨서 멈췄어요. "이어서 분석"을 눌러 주세요'); delete x.live; evSave(); evDraw(); return; }
+  delete x.t0; delete x.live; evSave(); evDraw();
 }
 async function runEval(){
   if (evRunning || !S.ev) return; evRunning=true; evStop=false; setAwake(true);
   clearInterval(evTick); evTick=setInterval(evTickUI, 1000); evDraw();
-  const ev0=S.ev;
-  const worker=async()=>{ while(!evStop && S.ev===ev0){ const x=ev0.items.find(y=>y.status==='wait'); if (!x) return; await evOne(x); } };
-  await Promise.all(Array.from({length:EV_PAR}, worker));
+  const ev0=S.ev; await probeJobs();
+  // 서버 작업이면 전부 한꺼번에 맡긴다(서버가 2개씩 차례로 돌림 → 앱을 꺼도 계속). 아니면 앱이 2개씩 직접.
+  const pick=()=>ev0.items.find(y=>!y.live && (y.status==='wait' || (y.status==='run' && y.job)));
+  const worker=async(n)=>{ while(!evStop && S.ev===ev0 && !(jobsOff && n>=EV_PAR)){ const x=pick(); if (!x) return; await evOne(x); } };   // 서버 작업이 안 되면 2개만
+  await Promise.all(Array.from({length:canJob()?ev0.items.length:EV_PAR}, (_,n)=>worker(n)));
   evRunning=false; clearInterval(evTick); evSave(); evDraw(); if (S.tab==='eval' && !S.recipe) setAwake(false);
   if (S.ev===ev0 && !ev0.items.some(y=>y.status==='wait')) toast('평가할 릴스를 모두 분석했어요');
 }
@@ -1908,8 +1978,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-21';
-const TERMS_CHANGES='저장한 레시피 직접 수정과 "결과가 이상해요"(다시 분석) 기능을 더하고 그 내용을 약관에 반영했어요(11월 21일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-22';
+const TERMS_CHANGES='앱을 닫아도 서버가 분석을 끝까지 하도록 바꾸고(분석 작업 기록은 결과를 받으면 바로, 늦어도 3일 뒤 삭제), 저장한 레시피 직접 수정과 "결과가 이상해요"를 더했어요(11월 22일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -1942,7 +2012,8 @@ function showGate(){
         <tr><td>구글 계정 이메일·이름, 닉네임, 프로필 사진</td><td>로그인, 피드 작성자 표시</td><td>탈퇴할 때까지</td></tr>
         <tr><td>게시물, 저장한 레시피(직접 고친 내용 포함)</td><td>피드, 레시피 보관</td><td>삭제·탈퇴할 때까지</td></tr>
         <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr>
-        <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr></table>
+        <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr>
+        <tr><td>분석 작업(링크·진행 상황·결과)</td><td>앱을 닫아도 분석 이어서 하기</td><td>결과를 받으면 삭제, 최대 3일</td></tr></table>
         <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
     </div>
     <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
@@ -2122,6 +2193,12 @@ function saveResume(){
 }
 document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState==='hidden') saveResume(); });
 window.addEventListener('pagehide', saveResume);
+// 앱을 닫은 동안 서버가 분석하던 작업이 있으면 그 결과부터 받아 온다
+function resumeEvalJobs(){ if (S.ev && S.ev.items.some(x=>x.status==='run'&&x.job) && canJob()) runEval(); }
+function resumeJob(){
+  const j=LS.get('rc_job',null); if (!j || !j.id || Date.now()-j.at>3*86400e3){ LS.set('rc_job',null); return false; }
+  S.tab='import'; S.recipe=null; resetInput(); S.link=j.link; analyze({jobId:j.id, replaceId:j.replaceId, t0:j.at}); return true;
+}
 function resumeLast(){
   const r=LS.get('rc_resume',null); if (!r || Date.now()-r.at > 12*3600e3) return;
   if (r.tab && r.tab!=='import') { S.tab=r.tab; }
@@ -2143,7 +2220,8 @@ render();
 if (!consented()) showGate();
 pushGuard();
 if (new URLSearchParams(location.search).has('share')) whenConsented(readShareInbox);
-else whenConsented(resumeLast);
+else whenConsented(()=>{ if (!resumeJob()) resumeLast(); });
+whenConsented(()=>setTimeout(resumeEvalJobs, 300));
 initCloud();
 </script>
 </body>

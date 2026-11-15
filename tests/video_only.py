@@ -13,8 +13,10 @@ with sync_playwright() as p:
     def share(code): pg.evaluate("""(c)=>{const f=document.createElement('form');f.method='POST';f.action='/share-target';f.enctype='multipart/form-data';
  const t=document.createElement('input');t.name='text';t.value='https://www.instagram.com/reel/'+c+'/';f.appendChild(t);document.body.appendChild(f);f.submit();}""", code)
     setm('mode=silent&script=scanlog,pasta&video=reel.webm'); share('SCANUI01')
-    pg.wait_for_function("document.body.innerText.includes('장면별로 기록')", timeout=30000); pg.screenshot(path='u_scan.png')
-    pg.wait_for_selector('.rhead h1', timeout=30000); print('recipe', pg.inner_text('.rhead h1'), '|', pg.inner_text('.ailabel').split('\n')[-1])
+    # 진행 단계는 서버 작업을 2.5초마다 확인하므로 짧은 단계는 화면에 안 보일 수 있다 → 서버 기록으로 2단계(장면 기록 → 정리)를 확인
+    pg.wait_for_selector('.rhead h1', timeout=60000); pg.screenshot(path='u_scan.png')
+    import json; kinds=[g.split(':')[2] for g in json.load(urllib.request.urlopen(B+'/__st'))['gemModels']]; print('kinds', kinds); assert kinds[:2]==['scan','compose'], 'two-stage not used'
+    print('recipe', pg.inner_text('.rhead h1'), '|', pg.inner_text('.ailabel').split('\n')[-1])
     pg.click('#back'); pg.wait_for_timeout(200)
     setm('mode=silent&script=scannot'); share('SCANNOT01'); pg.wait_for_selector('.err', timeout=30000); print('err:', pg.inner_text('.err').replace('\n',' / '))
     pg.screenshot(path='u_err.png')

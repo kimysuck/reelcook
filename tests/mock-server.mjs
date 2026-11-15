@@ -1,7 +1,7 @@
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const HERE=path.dirname(fileURLToPath(import.meta.url)); const ROOT=path.resolve(HERE,'..');
-process.env.GEMINI_API_KEY='k'; process.env.APP_PASSCODE='1234'; process.env.APIFY_TOKEN='tok'; process.env.SUPABASE_URL='https://fake.supabase.co'; process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_x'; process.env.SUPABASE_SECRET_KEY='sb_secret_x'; process.env.TESTER_EMAILS=process.env.TESTER_EMAILS||'tester@example.com';
+process.env.GEMINI_API_KEY='k'; process.env.APP_PASSCODE='1234'; process.env.APIFY_TOKEN='tok'; process.env.SUPABASE_URL='https://fake.supabase.co'; process.env.SUPABASE_PUBLISHABLE_KEY='sb_publishable_x'; process.env.SUPABASE_SECRET_KEY='sb_secret_x'; process.env.TESTER_EMAILS=process.env.TESTER_EMAILS||'tester@example.com'; process.env.JOB_BASE_URL='http://localhost:8788';
 const CACHE=new Map(); const DB={profiles:[],recipes:[],posts:[],likes:[]}; const PHOTOS=new Map();
 const MOCK={title:"대패삼겹 숙주볶음",emoji:"🥓",summary:"10분 자취 요리",servings:2,difficulty:"쉬움",total_min:10,confidence:"high",assumptions:[],
 ingredients:[{name:"대패삼겹살",group:"주재료",original:"200g",orig_qty:200,orig_unit:"g",grams:200,primary:"g",buy:true,brand:"",buy_keyword:"대패삼겹살"},
@@ -13,7 +13,29 @@ ingredients:[{name:"대패삼겹살",group:"주재료",original:"200g",orig_qty:
 steps:[{text:"팬에 [[0]]을 올려 바싹 굽는다",heat:"중불",seconds:180,cue:"가장자리가 갈색이 되면",tip:"기름은 안 둘러도 돼요",mistake:"",clip:{start:"00:02",end:"00:06"},photo:"00:05"},{text:"[[2]], [[3]], [[4]]를 붓고 [[1]]을 넣어 30초 볶는다",heat:"강불",seconds:30,cue:"",tip:"",mistake:"오래 볶으면 숙주에서 물이 나와요",clip:{start:"00:12",end:"00:16"},photo:"00:15"}],
 tools:[],nutrition_per_serving:{kcal:520,carb_g:12,protein_g:22,fat_g:42,sugar_g:5,sodium_mg:1300},beginner_notes:["재료를 먼저 다 손질해 두세요"]};
 const st={mode:'caption', gem:[], firstEmpty:false, script:[], usage:{}, quota:{}, quotaFill:0, fails:[]};
+const realFetch=globalThis.fetch; const JOBS=[];
+// analysis_jobs 표 흉내 (lib/jobs.js가 쓰는 필터만)
+function jobsRest(url, opts){
+  const q=new URL(url).searchParams, m=(opts.method||'GET').toUpperCase();
+  const val=(k)=>q.get(k); const list=v=>v.replace(/^in\.\(|\)$/g,'').split(',');
+  const pred=r=>{ for (const [k,v] of q){ if (['select','order','limit','or'].includes(k)) continue;
+      if (v.startsWith('eq.') && String(r[k])!==v.slice(3)) return false;
+      if (v.startsWith('in.') && !list(v).includes(String(r[k]))) return false;
+      if (v.startsWith('gt.') && !(r[k]>v.slice(3))) return false;
+      if (v.startsWith('lt.') && !(r[k]<v.slice(3))) return false; }
+    const o=val('or'); if (o){ const iso=(o.match(/updated_at\.lt\."([^"]+)"/)||[])[1]; if (!(r.status==='queued' || (r.status==='running' && r.updated_at<iso))) return false; }
+    return true; };
+  const J=o=>({ok:true,status:200,json:async()=>o});
+  if (m==='POST'){ const b=JSON.parse(opts.body); const now=new Date().toISOString(); const row={id:crypto.randomUUID(),created_at:now,updated_at:now,status:'queued',hop:0,prio:0,tester:false,stage:null,state:null,result:null,...b}; JOBS.push(row); return J([row]); }
+  const rows=JOBS.filter(pred);
+  if (m==='PATCH'){ const b=JSON.parse(opts.body); rows.forEach(r=>Object.assign(r,b)); return J(rows.map(r=>({...r}))); }
+  if (m==='DELETE'){ for (const r of rows) JOBS.splice(JOBS.indexOf(r),1); return J([]); }
+  let out=rows.slice(); const ord=val('order')||''; if (ord.startsWith('prio')) out.sort((a,b)=>a.prio-b.prio||a.created_at.localeCompare(b.created_at)); else out.sort((a,b)=>a.created_at.localeCompare(b.created_at));
+  if (val('limit')) out=out.slice(0,+val('limit')); return J(out.map(r=>({...r})));
+}
 globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
+  if(url.startsWith('http://localhost:8788/')) return realFetch(url,opts);   // 서버가 스스로 다음 단계를 부를 때
+  if(url.startsWith('https://fake.supabase.co/rest/v1/analysis_jobs')){ if(st.nojobs) return {ok:false,status:404,json:async()=>({message:'relation does not exist'})}; return jobsRest(url,opts); }
   // Google 파일 저장소(Files API) 흉내: 올리기 시작 → 올리기 → 처리 상태 → 지우기
   if(url.startsWith('https://generativelanguage.googleapis.com/upload/v1beta/files')){ st.files=st.files||{up:0,del:0};
     if(!url.includes('upload_id')) return {ok:true,status:200,headers:new Map([['x-goog-upload-url','https://generativelanguage.googleapis.com/upload/v1beta/files?upload_id=u'+(++st.files.up)]]),json:async()=>({})};
@@ -95,8 +117,8 @@ http.createServer(async (req,res)=>{
   if(u.pathname.startsWith('/__photo/')){ const buf=PHOTOS.get(decodeURIComponent(u.pathname.slice(9))); res.setHeader('Content-Type','image/jpeg'); res.end(buf||''); return; }
   if(u.pathname==='/__nocol'){ st.nocol=u.searchParams.get('v')==='1'; res.end('ok'); return; }
   if(u.pathname==='/__unsafe'){ st.unsafeImage=u.searchParams.get('v')==='1'; res.end('ok'); return; }
-  if(u.pathname==='/__set'){ if(u.searchParams.has('fill')){ st.quotaFill=+u.searchParams.get('fill'); st.quota={}; } if(u.searchParams.has('email')) st.userEmail=u.searchParams.get('email'); st.videoFile=u.searchParams.get('video')||null; st.script=(u.searchParams.get('script')||'').split(',').filter(Boolean); if(u.searchParams.get('resetUsage')) st.usage={}; if(u.searchParams.has('deadline')) process.env.ANALYZE_DEADLINE_MS=u.searchParams.get('deadline'); if(u.searchParams.has('resetFiles')) st.files={up:0,del:0}; Object.assign(st,{mode:u.searchParams.get('mode')||'caption',firstEmpty:u.searchParams.get('empty')==='1',gem:[]}); res.end('ok'); return; }
-  if(u.pathname==='/__st'){ res.end(JSON.stringify({files:st.files,apifyCalls:st.apifyCalls||0,uploads:st.uploads,mods:st.mods,posts:DB.posts.map(p=>({kind:p.kind,flagged:p.flagged,title:p.title,photo:p.photo_path})),profiles:DB.profiles,dbcalls:st.dbcalls,cache:[...CACHE.keys()],ranges:st.ranges,apify:st.apify,usage:st.usage,quota:st.quota,lastWho:st.lastWho,fails:st.fails,cacheSrc:[...CACHE.values()].map(c=>Object.keys(c.source||{})),script:st.script,gemModels:st.gem.map(g=>g.model+':'+(g.sc||'')+':'+(g.kind||'')+':'+g.nparts+':'+JSON.stringify(g.cfg&&g.cfg.mediaResolution||'')),gem:st.gem.map(g=>({file:g.file,kind:g.kind,sc:g.sc,vm:g.vm,cfg:g.cfg,nparts:g.nparts,hasComment:g.prompt.includes('설탕 반숟갈 추가'),tail:g.prompt.slice(-260)}))})); return; }
+  if(u.pathname==='/__set'){ if(u.searchParams.has('fill')){ st.quotaFill=+u.searchParams.get('fill'); st.quota={}; } if(u.searchParams.has('email')) st.userEmail=u.searchParams.get('email'); st.videoFile=u.searchParams.get('video')||null; st.script=(u.searchParams.get('script')||'').split(',').filter(Boolean); if(u.searchParams.get('resetUsage')) st.usage={}; if(u.searchParams.has('deadline')) process.env.ANALYZE_DEADLINE_MS=u.searchParams.get('deadline'); if(u.searchParams.has('resetFiles')) st.files={up:0,del:0}; if(u.searchParams.has('jobs')){ if(u.searchParams.get('jobs')==='0') delete process.env.JOB_BASE_URL; else process.env.JOB_BASE_URL='http://localhost:8788'; } Object.assign(st,{mode:u.searchParams.get('mode')||'caption',firstEmpty:u.searchParams.get('empty')==='1',gem:[]}); res.end('ok'); return; }
+  if(u.pathname==='/__st'){ res.end(JSON.stringify({jobs:JOBS.map(j=>({id:j.id,status:j.status,stage:j.stage,hop:j.hop,prio:j.prio,owner:j.owner,link:j.link})),files:st.files,apifyCalls:st.apifyCalls||0,uploads:st.uploads,mods:st.mods,posts:DB.posts.map(p=>({kind:p.kind,flagged:p.flagged,title:p.title,photo:p.photo_path})),profiles:DB.profiles,dbcalls:st.dbcalls,cache:[...CACHE.keys()],ranges:st.ranges,apify:st.apify,usage:st.usage,quota:st.quota,lastWho:st.lastWho,fails:st.fails,cacheSrc:[...CACHE.values()].map(c=>Object.keys(c.source||{})),script:st.script,gemModels:st.gem.map(g=>g.model+':'+(g.sc||'')+':'+(g.kind||'')+':'+g.nparts+':'+JSON.stringify(g.cfg&&g.cfg.mediaResolution||'')),gem:st.gem.map(g=>({file:g.file,kind:g.kind,sc:g.sc,vm:g.vm,cfg:g.cfg,nparts:g.nparts,hasComment:g.prompt.includes('설탕 반숟갈 추가'),tail:g.prompt.slice(-260)}))})); return; }
   if(u.pathname.startsWith('/api/')){
     let raw=''; for await(const c of req) raw+=c; req.body=raw?JSON.parse(raw):{}; req.query=Object.fromEntries(u.searchParams);
     res.status=c=>{res.statusCode=c;return res;}; res.json=o=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(o));};
