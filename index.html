@@ -525,7 +525,7 @@ p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.instal
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.13';
+const VERSION='v1.13.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -1420,7 +1420,7 @@ function evInfo(d, res, list){
   const subs=!!(ev.onscreen_text||'').trim(), speech=!!(ev.speech||'').trim();
   const type = capState==='레시피' || used.includes('caption') || used.includes('owner_comment') ? 'caption' : (subs||speech||used.includes('onscreen_text')||used.includes('speech')) ? 'subs' : 'video';
   const ownerText=(src.comments||[]).filter(c=>/^작성자: /.test(c)).join('\n');
-  const cap=String(src.caption||''), hangul=(cap.match(/[가-힣]/g)||[]).length, latin=(cap.match(/[A-Za-z]/g)||[]).length;
+  const cap=String(src.caption||'').replace(/https?:\/\/\S+|[#@][\p{L}\p{N}_.]+/gu,' '), hangul=(cap.match(/[가-힣]/g)||[]).length, latin=(cap.match(/[A-Za-z]/g)||[]).length;
   return { type, foreign: cap.length>20 && latin>hangul*2, multi: list.length>1, used, capState, owner, viewer, subs, speech, video:!!src.gotVideo,
     est:all.filter(i=>i.estimated).length, nAll:all.length, conf:(list[0]||{}).confidence||'',
     evSpeech:String(ev.speech||'').slice(0,150), evSubs:String(ev.onscreen_text||'').slice(0,150), cmUsed:(ev.comments_used||[]).slice(0,6),
@@ -1559,6 +1559,8 @@ function evSummary(){
     if (both.length) out.push(`- 사람과 AI 일치: ${same}/${both.length}개 (${Math.round(same/both.length*100)}%)`);
     out.push(`- 채점 모델: ${models.join(', ')}`);
   }
+  const je=done.filter(x=>!x.judge && x.judgeErr);   // 채점이 안 된 항목도 요약에 남긴다(4회차: 채점 실패가 요약에 안 보였음)
+  if (je.length) out.push(`${jd.length?'':'\n'}[AI 채점 실패] ${je.length}개 · ${[...new Set(je.map(x=>x.judgeErr.split(' · ')[0]))].join(', ')} · 예: ${je[0].judgeErr}`);
   const whyN=EV_WHY.map(([v,l])=>[l, it.filter(x=>x.mark==='ng'&&(x.why||[]).includes(v)).length]).filter(([,n])=>n);
   if (whyN.length) out.push('', `[틀린 이유] ${whyN.map(([l,n])=>`${l} ${n}`).join(' · ')}`);
   const flip=it.filter(x=>x.prevMark && x.mark && x.prevMark!==x.mark); if (flip.length) out.push(`[지난번과 달라짐] ${flip.map(x=>`${it.indexOf(x)+1}번 ${x.prevMark==='ok'?'✓→✗':'✗→✓'}`).join(', ')}`);
@@ -2255,7 +2257,9 @@ async function jobDiag(el){
     const ok=d.table && d.self==='ok', net=d.sweepAgo!=null && d.sweepAgo<180;
     el.innerHTML = (ok ? `<b style="color:var(--herb)">정상</b> · 앱을 닫아도 서버가 분석해요`
       : `<b style="color:var(--hot)">문제 있음</b> · ${!d.table?'작업 표가 없어요(Supabase에서 update-v1.8.sql 실행 필요). ':''}${d.self!=='ok'?`서버가 다음 단계를 부르지 못해요(${esc(d.self)}, 주소 ${esc(d.base)}). `:''}지금은 앱이 직접 분석해요(앱을 켜 두세요).`)
-      + `<div style="margin-top:4px">끝까지 이어서 하기: ${d.bg?'<b style="color:var(--herb)">켜짐</b>':'<b style="color:var(--hot)">꺼짐</b>'} · 안전망(1분마다 확인): ${net?`<b style="color:var(--herb)">켜짐</b> (${d.sweepAgo}초 전)`:'<b style="color:var(--hot)">꺼짐</b> (Supabase에서 update-v1.9.sql 실행 필요)'}</div>`;
+      + `<div style="margin-top:4px">끝까지 이어서 하기: ${d.bg?'<b style="color:var(--herb)">켜짐</b>':'<b style="color:var(--hot)">꺼짐</b>'} · 안전망(1분마다 확인): ${net?`<b style="color:var(--herb)">켜짐</b> (${d.sweepAgo}초 전)`:'<b style="color:var(--hot)">꺼짐</b> (Supabase에서 update-v1.9.sql 실행 필요)'}</div>`
+      + (d.judges ? `<div style="margin-top:4px">AI 채점 모델: A ${esc(d.judges.A)} · B ${esc(d.judges.B)} · 검토 ${esc(d.judges.ARB)} ${d.missing&&d.missing.length?`<b style="color:var(--hot)">· 이 API 키에 없는 이름: ${esc(d.missing.join(', '))}</b> (예비 Flash로 채점돼요)`:'<b style="color:var(--herb)">· 모두 사용 가능</b>'}</div>`
+        + `<details style="margin-top:4px"><summary class="small">쓸 수 있는 모델 이름 보기</summary><div class="small" style="word-break:break-all">${esc((d.models||[]).join(', '))}</div></details>` : '');
   }catch(e){ el.textContent='점검하지 못했어요(인터넷 연결 확인)'; }
 }
 

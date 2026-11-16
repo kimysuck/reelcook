@@ -24,12 +24,12 @@ with sync_playwright() as p:
     assert 'AI 채점 틀림' in ai and '✗ 분량' in ai and '✓ 재료' in ai and '두 AI 일치 3/4 (검토 1)' in ai and '간장 2숟갈' in ai, 'judge line'
     assert '채점 기준: 재료 빠짐 없음 · 분량 ±30%' in pg.inner_text('#app'), 'rubric shown'
     g=[(x.split(':')[0], x.split(':')[2]) for x in st()['gemModels']]; print('호출:', g)
-    assert [k for m,k in g]==['single','judge','judge','arb'] and g[1][0]=='gemini-3.1-pro' and g[2][0]=='gemini-4-carbon' and g[3][0]=='gemini-4-argon', 'judge models'
+    assert [k for m,k in g]==['single','judge','judge','arb'] and g[1][0]=='gemini-3.8-flash' and g[2][0]=='gemini-3.6-flash' and g[3][0]=='gemini-3.7-flash', 'judge models'
     assert st()['files']['up']==2, 'judge should upload the video once'   # 분석 1 + 채점 1
     # 사람도 ✗ → 사람과 AI 일치 1/1
     pg.click('[data-evm="0:ng"]'); pg.click('#evCopy'); pg.wait_for_timeout(300); t=pg.evaluate('navigator.clipboard.readText()')
     print(t[t.index('[AI 채점]'):t.index('[AI 채점]')+260])
-    for k in ['[AI 채점] 1개 · 맞은 비율 0%','기준별 통과: 재료 1/1 · 분량 0/1 · 순서 1/1 · 방법 1/1','채점 AI 둘의 일치: 3/4 기준 · 검토 AI가 결정 1번','사람과 AI 일치: 1/1개 (100%)','채점 모델: gemini-3.1-pro, gemini-4-carbon, gemini-4-argon','AI 채점 틀림: ✓ 재료 · ✗ 분량','[릴스 유형별] 표본 1개 (목표 30개까지 29개)']:
+    for k in ['[AI 채점] 1개 · 맞은 비율 0%','기준별 통과: 재료 1/1 · 분량 0/1 · 순서 1/1 · 방법 1/1','채점 AI 둘의 일치: 3/4 기준 · 검토 AI가 결정 1번','사람과 AI 일치: 1/1개 (100%)','채점 모델: gemini-3.8-flash, gemini-3.6-flash, gemini-3.7-flash','AI 채점 틀림: ✓ 재료 · ✗ 분량','[릴스 유형별] 표본 1개 (목표 30개까지 29개)']:
         assert k in t, 'summary missing: '+k
     # 채점 토큰은 분석 통계와 따로
     s=st()['stats']; kinds={v['kind']:v for v in s.values()}; print('통계 judge:', kinds.get('judge'))

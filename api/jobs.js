@@ -9,7 +9,8 @@ import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
 import { recordOutcome, bumpStats } from '../lib/stats.js';
-import { runJudge } from '../lib/judge.js';
+import { runJudge, JUDGES } from '../lib/judge.js';
+import { listModels } from '../lib/gemini.js';
 import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose, canBg, background, sweep } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
@@ -18,6 +19,11 @@ const MAX_OPEN = 50;   // 한 기기에서 동시에 맡길 수 있는 작업 �
 // 끝나면 알림: 보통 분석은 하나씩, 평가 모드는 이 기기의 평가 작업이 모두 끝났을 때 한 번만
 async function notify(job, out) {
   const sub = job.body && job.body.push; if (!sub) return;
+  // AI 채점(prio 2)은 분석이 모두 끝난 뒤에 돌고, 채점까지 모두 끝나면 한 번만 알린다
+  if (job.prio === 2) {
+    if (await countOpen(job.owner, 2) > 0 || await countOpen(job.owner, 1) > 0) return;
+    return sendPush(sub, { title: 'AI 채점이 모두 끝났어요', body: '눌러서 평가 요약을 확인해 주세요', url: '/?eval=1', tag: 'eval-judge' });
+  }
   if (job.prio === 1) {
     if (await countOpen(job.owner, 1) > 0) return;
     return sendPush(sub, { title: '평가 분석이 모두 끝났어요', body: '눌러서 결과를 확인하고 ✓/✗를 골라 주세요', url: '/?eval=1', tag: 'eval' });
@@ -78,7 +84,11 @@ export default async function handler(req, res) {
   if (q.diag) {   // 테스터 로그인일 때만 (F-A2)
     const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
     if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
-    return res.status(200).json(await diagnose());
+    const d = await diagnose();
+    // 채점 AI로 정한 모델 이름이 이 API 키에 실제로 있는지 (없는 이름이면 예비 모델로 채점됨)
+    const have = process.env.GEMINI_API_KEY ? await listModels(process.env.GEMINI_API_KEY) : null;
+    if (have) { const J = JUDGES(); d.judges = Object.fromEntries(['A', 'B', 'ARB'].map(k => [k, J[k][0]])); d.missing = [...new Set(['A', 'B', 'ARB'].map(k => J[k][0]))].filter(m => !have.includes(m)); d.models = have.filter(m => /^gemini-/.test(m)).slice(0, 40); }
+    return res.status(200).json(d);
   }
   if (q.ping) return res.status(req.headers['x-job-key'] === jobKey() ? 200 : 403).json({ ok: req.headers['x-job-key'] === jobKey() });
 
@@ -103,7 +113,7 @@ export default async function handler(req, res) {
       if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
       const recipes = Array.isArray(b.recipes) ? b.recipes.slice(0, 4) : []; if (!recipes.length || JSON.stringify(recipes).length > 80000) return res.status(400).json({ error: 'recipes' });
       if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
-      const job = await createJob({ owner, who: null, tester: true, prio: 1, link, body: { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
+      const job = await createJob({ owner, who: null, tester: true, prio: 2, link, body: { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
       if (!job) return res.status(503).json({ error: 'no_jobs' });
       await kickNext(owner); return res.status(200).json({ id: job.id });
     }
