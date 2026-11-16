@@ -12,7 +12,7 @@ import { recordOutcome } from '../lib/stats.js';
 
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
-const CACHE_V = 5;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
+const CACHE_V = 6;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
 const MAX_IMAGES = 24;
 const MAX_IMAGE_B64 = 1_500_000;
 const DEADLINE_MS = () => +process.env.ANALYZE_DEADLINE_MS || 270_000;   // Vercel 300초 제한 전에 스스로 정리 (테스트에서만 바꿈)
@@ -59,6 +59,7 @@ ${lessonBlock(lessons)}[2단계 — 자료 판단 규칙]
 - 같은 레시피 안에서 양념은 가능하면 같은 단위로 통일해 비율을 비교할 수 있게 한다.
 - grams/ml: 정밀 모드 참고값. 한국 가정 기준(밥숟가락 1 ≈ 10ml, 계량스푼 1큰술 = 15ml, 작은술 = 5ml, 종이컵 ≈ 180ml, 한 꼬집 ≈ 0.5g, 대파 1대 ≈ 100g, 양파 1개 ≈ 200g, 달걀 1개 ≈ 50g, 마늘 1쪽 ≈ 5g).
 - primary: "ml" 액체, "g" 고체·가루, "count" 달걀·통채소.
+- from: 이 재료의 분량을 어디서 알았는지 하나만(사용자가 믿을 수 있게 화면에 보여 준다). "caption"(캡션에 적힘) · "owner_comment"(작성자 댓글) · "onscreen_text"(화면 자막·글자) · "speech"(음성으로 말함) · "visual"(화면을 보고 정함, 이때 숫자 분량이면 estimated true) · "viewer_comment"(시청자 댓글). 실제로 확인한 곳만 쓴다.
 - original: 자료에 적힌 원문 표현(20자 이내, 없으면 생략). sources: 이 레시피를 만든 근거 종류("caption","owner_comment","viewer_comment","onscreen_text","speech","visual").
 
 [단계]
@@ -83,7 +84,7 @@ ${hasVideo ? `- cover_time: 완성된 음식(그릇·접시에 담긴 결과물)
 출력 JSON(이 키만, 값이 없거나 null인 키는 생략해도 된다):
 {"is_food":true,"reason":"","evidence":{"speech":"","onscreen_text":"","caption":"레시피|안내|없음","comments_used":[]},
 "recipes":[{"title":"","summary":"한 줄",${hasVideo ? '"cover_time":"00:41",' : ''}${nImg ? '"cover_frame":3,' : ''}"servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","sources":["caption"],"assumptions":[""],
-"ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_qty_max":null,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
+"ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_qty_max":null,"orig_unit":"숟갈","from":"caption","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
 "steps":[{"text":"","heat":"중불","seconds":60,"cue":"","tip":"","mistake":""${hasVideo ? ',"clip":{"start":"00:05","end":"00:09"},"photo":"00:08"' : ''}${nImg ? ',"frame":0' : ''}}],
 "tools":[{"name":"","buy_keyword":""}],
 "nutrition_per_serving":{"kcal":0,"carb_g":0,"protein_g":0,"fat_g":0,"sugar_g":0,"sodium_mg":0},

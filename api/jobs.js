@@ -8,7 +8,7 @@ import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
-import { recordOutcome, bumpStats } from '../lib/stats.js';
+import { recordOutcome, bumpStats, statsSince } from '../lib/stats.js';
 import { runJudge, JUDGES } from '../lib/judge.js';
 import { listLessons, setLesson } from '../lib/lessons.js';
 import { listModels } from '../lib/gemini.js';
@@ -119,11 +119,21 @@ export default async function handler(req, res) {
     if (!shortcodeOf(link)) return res.status(400).json({ error: 'link' });
     if (b.kind === 'judge' || b.kind === 'learn') {   // AI 채점·배우기는 테스터만, 하루 분석 횟수와 상관없음
       const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
-      if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
+      // 이용자의 "결과가 이상해요"로 배우기 (v1.15): 누구나, 다만 한 기기 하루 3번·전체 하루 50번까지(장난 신고로 AI 사용량이 새지 않게).
+      //   학습 AI가 영상을 다시 보고 진짜 실수일 때만 규칙이 되므로, 잘못된 신고는 규칙이 되지 않는다
+      const report = b.kind === 'learn' && !!b.report && !isTester(u);
+      if (report) {
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
+        const me = 'lr:' + String(owner).slice(-12);   // 기기별 횟수(기기 번호 해시의 일부, 사람을 알아볼 수 없음)
+        const rows = (await statsSince(1).catch(() => [])).filter(r => r.day === today);
+        const n = k => rows.filter(r => r.kind === k).reduce((a, r) => a + Number(r.n), 0);
+        if (n(me) >= 3 || n('learn_rep') >= 50) return res.status(429).json({ error: 'learn_limit' });
+        await bumpStats('learn_rep', { n: 1 }).catch(() => {}); await bumpStats(me, { n: 1 }).catch(() => {});
+      } else if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
       const recipes = Array.isArray(b.recipes) ? b.recipes.slice(0, 4) : []; if (!recipes.length || JSON.stringify(recipes).length > 80000) return res.status(400).json({ error: 'recipes' });
       if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
-      const job = await createJob({ owner, who: null, tester: true, prio: 2, link, body: b.kind === 'learn'
-        ? { kind: 'learn', link, recipes, problems: (Array.isArray(b.problems) ? b.problems : []).slice(0, 6).map(p => ({ k: String(p && p.k || 'other').slice(0, 20), reason: String(p && p.reason || '').slice(0, 300) })) }
+      const job = await createJob({ owner, who: null, tester: !report, prio: 2, link, body: b.kind === 'learn'
+        ? { kind: 'learn', link, recipes, report: !!b.report, problems: (Array.isArray(b.problems) ? b.problems : []).slice(0, 6).map(p => ({ k: String(p && p.k || 'other').slice(0, 20), reason: String(p && p.reason || '').slice(0, 300) })) }
         : { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
       if (!job) return res.status(503).json({ error: 'no_jobs' });
       await kickNext(owner); return res.status(200).json({ id: job.id });

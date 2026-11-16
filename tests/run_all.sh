@@ -3,7 +3,7 @@
 cd "$(dirname "$0")"
 [ -d ../node_modules/@vercel/functions ] || (cd .. && npm install --silent --no-audit --no-fund)   # 서버 코드가 쓰는 패키지
 PASS=0; FAIL=0
-for t in e2e_full consent_theme share_before_consent multi_quota_ui video_guide guide_order back_resume video_only daily_limit stage2 long_video step_text background push share_race splash batch1 batch2 judge judge_fallback learn_human; do
+for t in e2e_full consent_theme share_before_consent multi_quota_ui video_guide guide_order back_resume video_only daily_limit stage2 long_video step_text background push share_race splash batch1 batch2 judge judge_fallback learn_human trust; do
   pkill -f mock-server.mjs 2>/dev/null; (command -v fuser >/dev/null && fuser -k 8788/tcp >/dev/null 2>&1); sleep 0.4
   node mock-server.mjs > /tmp/mock.log 2>&1 & sleep 1.2
   out=$(timeout 300 python3 $t.py 2>&1)
