@@ -74,6 +74,7 @@ globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
     if(sc==='slow'){ await new Promise((res,rej)=>{ const t=setTimeout(res,30000); opts.signal&&opts.signal.addEventListener('abort',()=>{ clearTimeout(t); const e=new Error('aborted'); e.name='AbortError'; rej(e); }); }); }
     await new Promise(r=>setTimeout(r,300));
     const E=(status,error)=>({ok:false,status,json:async()=>({error})});
+    if(sc==='gone') return E(404,{code:404,message:'models/'+model+' is not found for API version v1beta, or is not supported for generateContent.',status:'NOT_FOUND'});
     if(sc==='503') return E(503,{code:503,message:'The model is overloaded due to high demand.',status:'UNAVAILABLE'});
     if(sc==='429m') return E(429,{code:429,message:'quota',status:'RESOURCE_EXHAUSTED',details:[{'@type':'type.googleapis.com/google.rpc.QuotaFailure',violations:[{quotaId:'GenerateRequestsPerMinutePerProjectPerModel-FreeTier'}]},{'@type':'type.googleapis.com/google.rpc.RetryInfo',retryDelay:'2s'}]});
     if(sc==='429d') return E(429,{code:429,message:'quota',status:'RESOURCE_EXHAUSTED',details:[{'@type':'type.googleapis.com/google.rpc.QuotaFailure',violations:[{quotaId:'GenerateRequestsPerDayPerProjectPerModel-FreeTier'}]},{'@type':'type.googleapis.com/google.rpc.RetryInfo',retryDelay:'40000s'}]});

@@ -3,7 +3,7 @@
 
 import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK, qtyCount } from '../lib/instagram.js';
 import { cacheGet, cachePut, cachePatch } from '../lib/db.js';
-import { generate, uploadVideo, deleteVideo, videoPart, FILE_URI } from '../lib/gemini.js';
+import { generate, uploadVideo, deleteVideo, videoPart, FILE_URI, MODELS } from '../lib/gemini.js';
 import { bumpUsage } from '../lib/usage.js';
 import { verifyUser } from '../lib/auth.js';
 import { DAILY_LIMIT, kstMidnight, isTester, whoOf, usedToday, addUse, logFailure, cleanupMaybe } from '../lib/quota.js';
@@ -152,6 +152,10 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
   let owner = R && /^[a-z0-9._]{1,30}$/.test(String(R.owner || '')) ? R.owner : null;   // 원작자 공개 계정 아이디 (F-U2)
   let scanSaved = R && R.scanLog && typeof R.scanLog === 'object' && JSON.stringify(R.scanLog).length < 60000 ? R.scanLog : null;
   const lite = !!R;   // 이어서 분석할 때는 더 가벼운 설정으로 시간 안에 끝낸다
+  // 이어서 분석할 때는 앞에서 시간 초과·붐빔이었던 모델을 뒤로 미루고, 마지막 기회에는 화질을 더 낮춘다
+  const avoid = new Set((R && Array.isArray(R.notes) ? R.notes : []).map(n => String(n).match(/^([\w.-]+)#\d+:(cut|busy)/)).filter(Boolean).map(m => 'gemini-' + m[1]));
+  const order = R ? [...MODELS.filter(m => !avoid.has(m)), ...MODELS.filter(m => avoid.has(m))] : null;
+  const lastHop = !!R && hop + 1 >= MAX_HOPS;
   const link = String(body.link || '').slice(0, 500);
   const fromVideo = !!body.fromVideo;
   const images = Array.isArray(body.images) ? body.images.slice(0, MAX_IMAGES) : [];
@@ -200,6 +204,14 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
       videoUrl = videoUrl || m.videoUrl; duration = duration || m.duration; owner = owner || m.owner || null; notes.push(...m.notes);
       emit({ stage: 'fetched', caption: m.caption || '', comments: showComments(comments), videoUrl: !!m.videoUrl, videoSrc: m.videoUrl && CDN_OK.test(m.videoUrl) ? m.videoUrl : null, duration: m.duration || null });
     }
+    // 릴스 정보를 못 받았으면, 예전에 같은 릴스를 분석할 때 받아 둔 캡션·영상 주소를 예비로 쓴다(다시 분석·평가 모드)
+    if (!caption.trim() && !videoUrl) {
+      const old = await cacheGet(code).catch(() => null);
+      if (old && ((old.source && old.source.caption) || old.video_url)) {
+        caption = (old.source && old.source.caption) || ''; videoUrl = old.video_url || null; owner = owner || (old.source && old.source.owner) || null;
+        notes.push('cache_fallback');
+      }
+    }
   }
 
   let video = null;
@@ -226,7 +238,7 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
   const fps = fps0 && lite ? Math.max(0.25, fps0 / 2) : fps0;
   const JSONC = { responseMimeType: 'application/json' };
   const cfgs = lite
-    ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, ...(visual ? { mediaResolution: 'MEDIA_RESOLUTION_MEDIUM' } : {}) }, meta: true }, { gen: JSONC, meta: false }]
+    ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, ...(visual ? { mediaResolution: lastHop ? 'MEDIA_RESOLUTION_LOW' : 'MEDIA_RESOLUTION_MEDIUM' } : {}) }, meta: true }, { gen: JSONC, meta: false }]
     : strongText
     ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: 'MEDIA_RESOLUTION_LOW' }, meta: true },
        ...(visual ? [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'medium' }, mediaResolution: 'MEDIA_RESOLUTION_HIGH' }, meta: true }] : []),
@@ -259,9 +271,9 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
     if (!log) {
       emit({ stage: 'scan' });
       const sfps0 = dur > 120 ? 0.33 : dur > 60 ? 0.5 : 1, sfps = lite ? Math.max(0.25, sfps0 / 2) : sfps0;
-      const scanCfgs = [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: lite ? 'MEDIA_RESOLUTION_MEDIUM' : 'MEDIA_RESOLUTION_HIGH' }, meta: true }, { gen: JSONC, meta: false }];
+      const scanCfgs = [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'low' }, mediaResolution: lastHop ? 'MEDIA_RESOLUTION_LOW' : lite ? 'MEDIA_RESOLUTION_MEDIUM' : 'MEDIA_RESOLUTION_HIGH' }, meta: true }, { gen: JSONC, meta: false }];
       const scanParts = cfg => [{ text: buildScanPrompt({ link }) }, videoPart(video, cfg.meta && sfps !== 1 ? { fps: sfps } : null)];
-      sc = await generate({ key, cfgs: scanCfgs, buildParts: scanParts, validate: t => { const j = parseJ(t); return !!j && ((Array.isArray(j.scenes) && j.scenes.length > 0) || j.is_cooking === false); }, emit, left, log: notes, meter });
+      sc = await generate({ key, cfgs: scanCfgs, buildParts: scanParts, validate: t => { const j = parseJ(t); return !!j && ((Array.isArray(j.scenes) && j.scenes.length > 0) || j.is_cooking === false); }, emit, left, log: notes, meter, models: order });
       if (!sc.ok) return sc;
       log = parseJ(sc.text);
       if (!log) return { ok: false, reason: 'error', message: 'scan_parse' };
@@ -270,7 +282,7 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
     if (log.is_cooking === false) return { ok: true, model: sc.model, mode: 'two_stage', text: JSON.stringify({ is_food: false, reason: log.reason || '요리 과정이 나오지 않는 영상', recipes: [] }) };
     emit({ stage: 'compose', scenes: (log.scenes || []).length });
     const p2 = buildPrompt({ caption, comments, link, nImg: 0, fromVideo: false, hasVideo: true, scanLog: log });
-    const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: lite ? 'low' : 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left, log: notes, meter });
+    const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: lite ? 'low' : 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left, log: notes, meter, models: order });
     if (out2.ok) out2.mode = 'two_stage';
     return out2;
   };
@@ -278,7 +290,7 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
   let out;
   if (visualFirst || scanSaved) out = await twoStage();
   else {
-    out = await generate({ key, cfgs, buildParts, validate, emit, left, log: notes, meter });
+    out = await generate({ key, cfgs, buildParts, validate, emit, left, log: notes, meter, models: order });
     // 한 번에 못 찾았으면(요리 아님 판정이 아닌데 레시피가 빔) 영상이 있으면 2단계로 한 번 더
     const r1 = out.ok ? parseResult(out.text) : null;
     if (video && out.ok && r1 && !r1.recipes.length && r1.is_food !== false && left() > 90000) { notes.push('fallback_two_stage'); out = await twoStage(); }
