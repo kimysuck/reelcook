@@ -493,6 +493,7 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 .survey .opt.ck{flex-wrap:wrap}.survey .opt.ck button{flex:1 1 30%;min-height:38px;font-size:.84rem}
 .usage.ops td:first-child{font-weight:700}
 /* v1.13: AI 채점 */
+.evlearn{color:var(--herb);margin-top:4px}
 .evai{margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--line2);font-size:.82rem;color:var(--ink2);line-height:1.55}.evai.ok b{color:var(--herb)}.evai.ng b{color:var(--hot)}
 /* 줄바꿈 다듬기 (v1.10): 한 줄을 꽉 채우고 다음 줄에 조금만 남는 모양을 피한다 */
 body{text-wrap:pretty}
@@ -525,7 +526,7 @@ p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.instal
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.13.2';
+const VERSION='v1.14';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -688,7 +689,7 @@ const isWordAmt = ing => ing.orig_qty==null && !!(ing.orig_unit||'').trim() && !
 function original(ing, f){
   const u=(ing.orig_unit||'').trim();
   if (isWordAmt(ing)) return {big:u, alt:'', word:true};
-  if (ing.orig_qty!=null && u) return {big:`${frac(ing.orig_qty*f)}${u}`, alt:''};   // 2숟갈, 200g (숫자와 단위는 붙여 쓴다)
+  if (ing.orig_qty!=null && u) return {big:`${frac(ing.orig_qty*f)}${ing.orig_qty_max>ing.orig_qty?'~'+frac(ing.orig_qty_max*f):''}${u}`, alt:''};   // 2숟갈, 200g, 범위면 5~6숟갈 (숫자와 단위는 붙여 쓴다)
   return null;
 }
 function amountOf(ing, f){
@@ -1406,10 +1407,11 @@ function capCheck(text, list){
   const t=String(text||''); if (!t.trim()) return null; let checked=0; const bad=[];
   for (const i of list){ const n=String(i.name||'').trim(); if (n.length<2 || i.orig_qty==null) continue;
     let m=null; for (let k=t.indexOf(n); k>=0 && !m; k=t.indexOf(n,k+1)){ if (k>0 && /[가-힣]/.test(t[k-1])) continue;   // "대패숙주"의 "숙주"는 건너뜀
-      m=t.slice(k+n.length, k+n.length+8).match(/^\s*[:：-]?\s*(\d+(?:\.\d+)?(?:\/\d+)?|반|½|¼|한|두|세|네)/); }   // 이름 바로 뒤의 분량만
+      m=t.slice(k+n.length, k+n.length+12).match(/^\s*[:：-]?\s*(\d+(?:\.\d+)?(?:\/\d+)?|반|½|¼|한|두|세|네)(?:\s*[-~]\s*(\d+(?:\.\d+)?))?/); }   // 이름 바로 뒤의 분량만
     if (!m) continue;
     const v=KNUM[m[1]] ?? (m[1].includes('/') ? (+m[1].split('/')[0])/(+m[1].split('/')[1]||1) : +m[1]);
-    checked++; if (Math.abs(v-i.orig_qty)>1e-6) bad.push(`${n}(캡션 ${m[1]}, AI ${roundAmt(i.orig_qty)})`); }
+    const hi=m[2]!=null ? +m[2] : v;   // "케첩 5-6"처럼 범위면 그 사이면 맞음
+    checked++; if (i.orig_qty < v-1e-6 || i.orig_qty > hi+1e-6) bad.push(`${n}(캡션 ${m[1]}${m[2]!=null?'-'+m[2]:''}, AI ${roundAmt(i.orig_qty)})`); }
   return checked ? {checked, bad} : null;
 }
 // 분석 응답 → 진단 정보
@@ -1440,7 +1442,7 @@ function viewEval(){
     <button class="btn pri" id="evGo" style="margin-top:14px">분석 시작</button>`;
   const it=e.items, done=it.filter(x=>x.status==='ok'||x.status==='fail').length, ok=it.filter(x=>x.mark==='ok').length, ng=it.filter(x=>x.mark==='ng').length;
   const st={wait:'대기', run:'분석 중…', ok:'완료', fail:'실패'};
-  return head+`${it.some(x=>x.status==='run'&&x.job)?pushCTA():''}<p class="muted small" style="margin-top:6px">채점 기준: ${RUBRIC}</p><div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
+  return head+`${it.some(x=>x.status==='run'&&x.job)?pushCTA():''}<p class="muted small" style="margin-top:6px">채점 기준: ${RUBRIC}</p><details id="evLsBox" class="small" style="margin-top:6px"><summary>배운 규칙 보기 (틀린 것에서 자동으로 배워 다음 분석에 적용)</summary><div id="evLs" style="margin-top:6px">불러오는 중…</div></details><div class="evsum"><b>${done}/${it.length}</b> 분석 · <span class="ok">✓ ${ok}</span> · <span class="ng">✗ ${ng}</span> · 미평가 ${it.filter(x=>x.status==='ok'&&!x.mark).length}</div>
     <div class="row" style="margin-top:12px;gap:8px">${evRunning?'<button class="btn ghost" style="flex:1" id="evStop">멈추기</button>':it.some(x=>x.status==='wait')?'<button class="btn pri" style="flex:1" id="evRun">이어서 분석</button>':''}
       <button class="btn sec" style="flex:1" id="evCopy">결과 요약 복사</button>${evRunning?'':'<button class="btn ghost" style="flex:1" id="evNew">새 평가</button>'}</div>
     ${evRunning?'':`<button class="btn link" id="evAgain" style="margin-top:8px">${IC.refresh}같은 링크로 다시 분석 (고친 뒤 비교)</button>`}
@@ -1451,7 +1453,7 @@ function viewEval(){
           ${x.info.auto?`<div class="${x.info.auto.bad.length?'bad':''}">자동 검사: 캡션 분량 ${x.info.auto.checked-x.info.auto.bad.length}/${x.info.auto.checked} 일치${x.info.auto.bad.length?` · 다름: ${esc(x.info.auto.bad.join(', '))}`:''}</div>`:''}</div>`:''}
         <div class="row evb"><button data-evv="${i}" class="btn ghost sm">보기</button><button data-evm="${i}:ok" class="mk ${x.mark==='ok'?'on':''}" aria-pressed="${x.mark==='ok'}">✓ 맞음</button><button data-evm="${i}:ng" class="mk ng ${x.mark==='ng'?'on':''}" aria-pressed="${x.mark==='ng'}">✗ 틀림</button></div>
         ${x.judge?`<div class="evai ${x.judge.pass?'ok':'ng'}"><b>AI 채점 ${x.judge.pass?'맞음':'틀림'}</b> · ${judgeLine(x.judge)}<span class="small"> · 두 AI 일치 ${x.judge.agree}/4${x.judge.split?` (검토 ${x.judge.split})`:''}</span>
-          ${EV_CRIT.filter(([k])=>!x.judge.criteria[k].pass && x.judge.criteria[k].reason).map(([k,l])=>`<div class="small">${l}: ${esc(x.judge.criteria[k].reason)}</div>`).join('')}</div>`
+          ${EV_CRIT.filter(([k])=>!x.judge.criteria[k].pass && x.judge.criteria[k].reason).map(([k,l])=>`<div class="small">${l}: ${esc(x.judge.criteria[k].reason)}</div>`).join('')}${learnLine(x.judge.learn)}</div>`
           : x.judgeErr?`<div class="evai"><span class="small">AI 채점 실패: ${esc(x.judgeErr)}</span></div>`:''}
         ${x.mark==='ng'?`<div class="evwhy">${EV_WHY.map(([v,l])=>`<button data-evw="${i}:${v}" class="${(x.why||[]).includes(v)?'on':''}" aria-pressed="${(x.why||[]).includes(v)}">${l}</button>`).join('')}</div>
           <input type="text" data-evn="${i}" maxlength="80" value="${esc(x.memo||'')}" placeholder="무엇이 틀렸나요 (선택, 예: 간장 2숟갈인데 1숟갈로 나옴)">`:''}`
@@ -1473,7 +1475,8 @@ function bindEval(){
   const nw=$('#evNew'); if (nw) nw.onclick=()=>confirmBox('평가 기록을 지우고 새로 시작할까요?', ()=>{ S.ev=null; LS.set('rc_eval',null); render(); }, '새로 시작');
   const ag=$('#evAgain'); if (ag) ag.onclick=()=>confirmBox('같은 링크를 새로 분석할까요? 이번 결과는 요약에 "지난번"으로 남아요.', ()=>{
     const prev=evStats(); S.ev={at:Date.now(), fresh:true, ai:S.ev.ai!==false, round:(S.ev.round||1)+1, prev, items:S.ev.items.map(x=>({link:x.link, status:'wait', mark:'', why:[], memo:'', prevMark:x.mark||''}))}; evSave(); runEval(); }, '다시 분석');
-  const cp=$('#evCopy'); if (cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(evSummary()); toast('평가 결과를 복사했어요. Claude에게 붙여 넣어 주세요'); }catch(e){ toast('복사하지 못했어요'); } };
+  const cp=$('#evCopy'); if (cp) cp.onclick=async()=>{ try{ await navigator.clipboard.writeText(evSummary()); const n=await evLearnHuman().catch(()=>0); toast(n?`평가 결과를 복사했어요. ✗ ${n}개에서 규칙을 배우는 중이에요`:'평가 결과를 복사했어요. Claude에게 붙여 넣어 주세요'); }catch(e){ toast('복사하지 못했어요'); } };
+  const ls=$('#evLs'); if (ls) $('#evLsBox').ontoggle=()=>{ if ($('#evLsBox').open) evLessons(ls); };
   document.querySelectorAll('[data-evm]').forEach(b=>b.onclick=()=>{ const [i,m]=b.dataset.evm.split(':'), x=S.ev.items[+i]; x.mark=x.mark===m?'':m; if (x.mark!=='ng'){ x.why=[]; } evSave(); evDraw(); });
   document.querySelectorAll('[data-evw]').forEach(b=>b.onclick=()=>{ const [i,w]=b.dataset.evw.split(':'), x=S.ev.items[+i]; x.why=x.why||[]; x.why=x.why.includes(w)?x.why.filter(y=>y!==w):[...x.why,w]; evSave(); evDraw(); });
   document.querySelectorAll('[data-evn]').forEach(n=>n.onchange=()=>{ S.ev.items[+n.dataset.evn].memo=n.value.trim(); evSave(); });
@@ -1483,7 +1486,7 @@ function bindEval(){
 }
 // 2개씩 동시에 분석한다(무료 AI 한도가 차면 서버가 다른 모델로 넘기거나 잠깐 기다린다). 평가 중에는 화면이 꺼지지 않게 한다.
 const EV_PAR=2;
-const EV_STAGE={start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기', continue:'시간이 더 걸려 이어서 분석 중', queued:'차례 기다리는 중', done:'결과 받는 중',
+const EV_STAGE={learn:'틀린 것에서 배우는 중', start:'시작', cached:'저장된 분석', fetch:'릴스 정보 가져오는 중', fetched:'릴스 정보 받음', download:'영상 받는 중', analyze:'AI가 영상 보는 중', scan:'영상 장면 기록 중', compose:'레시피 정리 중', retry:'더 꼼꼼히 다시 보는 중', busy:'AI가 붐벼 다시 시도', switch:'다른 AI 모델로 바꾸는 중', wait:'무료 한도 때문에 잠깐 대기', continue:'시간이 더 걸려 이어서 분석 중', queued:'차례 기다리는 중', done:'결과 받는 중',
   judge:'AI 채점 준비', judge_fetch:'AI 채점: 릴스 다시 보는 중', judge_a:'AI 채점: 채점자 A', judge_b:'AI 채점: 채점자 B', judge_arb:'AI 채점: 의견이 갈려 검토 중'};
 let evTick=null;
 function evTickUI(){ document.querySelectorAll('[data-evrun]').forEach(el=>{ const x=S.ev&&S.ev.items[+el.dataset.evrun]; if (x&&x.status==='run'&&x.t0) el.textContent=`${EV_STAGE[x.stage]||'분석 중'} · ${Math.round((Date.now()-x.t0)/1000)}초`; }); }
@@ -1520,6 +1523,29 @@ async function evJudge(x){
   if (d.error==='cancelled'||d.error==='__net') return;
   x.judgeJob=null;
   if (d.judge) x.judge=d.judge; else x.judgeErr=[d.error||d.status, ...(d.notes||[])].join(' · ').slice(0,160);
+}
+// 배운 규칙(v1.14): 채점·사람 평가에서 틀린 것을 일반 규칙으로 정리 → 다음 분석부터 AI 지시문에 들어간다
+const learnLine=l=>!l?'':l.added?`<div class="small evlearn">→ 새 규칙을 배웠어요: ${esc(l.rule)}</div>`:l.same?`<div class="small evlearn">→ 이미 배운 규칙 #${l.same}을 한 번 더 확인했어요</div>`:l.skipped==='not_real'?`<div class="small muted">→ 학습 AI가 다시 보니 채점이 틀려서 배우지 않았어요${l.why?`: ${esc(l.why)}`:''}</div>`:`<div class="small muted">→ 배우지 못했어요(${esc(l.skipped||'?')})</div>`;
+const LEARN_TXT=l=>!l?'':l.added?`새 규칙: ${l.rule}`:l.same?`기존 규칙 #${l.same} 확인`:l.skipped==='not_real'?`채점이 틀려 안 배움${l.why?`(${l.why})`:''}`:`못 배움(${l.skipped||'?'})`;
+async function evLessons(el){
+  try{ const r=await fetch('/api/jobs?lessons=1',{headers:await jobHeaders()}); const d=await r.json().catch(()=>({}));
+    if (r.status===501){ el.innerHTML='배운 규칙을 저장할 표가 없어요(Supabase에서 update-v1.14.sql 실행 필요)'; return; }
+    if (!r.ok) throw 0;
+    const L=d.lessons||[]; if (!L.length){ el.textContent='아직 배운 규칙이 없어요. AI 채점이나 ✗ 평가에서 틀린 것이 나오면 자동으로 배워요.'; return; }
+    el.innerHTML=L.map(l=>`<label class="chk small" style="align-items:flex-start"><input type="checkbox" data-lsn="${l.id}" ${l.active?'checked':''}><span>#${l.id} ${esc(l.rule)} <span class="muted">(${l.source==='human'?'사람 평가':'AI 채점'} · ${l.hits}번 확인)</span></span></label>`).join('');
+    el.querySelectorAll('[data-lsn]').forEach(c=>c.onchange=async()=>{ try{ await fetch('/api/jobs?lessons=1',{method:'PATCH',headers:{'Content-Type':'application/json',...await jobHeaders()},body:JSON.stringify({id:+c.dataset.lsn,active:c.checked})}); toast(c.checked?'규칙을 켰어요':'규칙을 껐어요(다음 분석부터 빠져요)'); }catch(e){ toast('바꾸지 못했어요'); } });
+  }catch(e){ el.textContent='불러오지 못했어요'; }
+}
+// 사람이 ✗로 표시한 것에서 배우기: 요약을 복사할 때 아직 안 보낸 것만 서버 작업으로 맡긴다(앱을 닫아도 계속)
+async function evLearnHuman(){
+  const it=(S.ev&&S.ev.items||[]).filter(x=>x.status==='ok' && x.mark==='ng' && !x.learnSent && x.recipes && ((x.why||[]).length || x.memo));
+  if (!it.length || !canJob()) return 0;
+  const strip=r=>({title:r.title, ingredients:r.ingredients, steps:(r.steps||[]).map(st=>({text:st.text, heat:st.heat}))});
+  let n=0; const hdr=await jobHeaders();
+  for (const x of it){ const why=x.why&&x.why.length?x.why:['other'];
+    const problems=why.map(w=>({k:w, reason:[(EV_WHY.find(y=>y[0]===w)||[,w])[1], x.memo||''].filter(Boolean).join(': ')}));
+    try{ const r=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json',...hdr},body:JSON.stringify({link:x.link, kind:'learn', recipes:x.recipes.map(strip), problems})}); if (r.ok){ x.learnSent=true; n++; } }catch(e){} }
+  evSave(); return n;
 }
 const judgeLine=j=>EV_CRIT.map(([k,l])=>`${j.criteria[k].pass?'✓':'✗'} ${l}`).join(' · ');
 async function runEval(){
@@ -1558,6 +1584,9 @@ function evSummary(){
     out.push(`- 채점 AI 둘의 일치: ${jd.reduce((a,x)=>a+x.judge.agree,0)}/${jd.length*4} 기준 · 검토 AI가 결정 ${jd.reduce((a,x)=>a+x.judge.split,0)}번`);
     if (both.length) out.push(`- 사람과 AI 일치: ${same}/${both.length}개 (${Math.round(same/both.length*100)}%)`);
     out.push(`- 채점 모델: ${models.join(', ')}`);
+    const lr=jd.filter(x=>x.judge.learn); if (lr.length){ const add=lr.filter(x=>x.judge.learn.added), same=lr.filter(x=>x.judge.learn.same), no=lr.filter(x=>x.judge.learn.skipped==='not_real');
+      out.push(`- 배운 규칙: 새로 ${add.length}개 · 이미 배운 규칙 확인 ${same.length}개 · 학습 AI가 다시 보니 채점이 틀림 ${no.length}개${lr.length-add.length-same.length-no.length?` · 못 배움 ${lr.length-add.length-same.length-no.length}개`:''}`);
+      add.forEach(x=>out.push(`  · ${it.indexOf(x)+1}번 → ${x.judge.learn.rule}`)); }
   }
   const je=done.filter(x=>!x.judge && x.judgeErr);   // 채점이 안 된 항목도 요약에 남긴다(4회차: 채점 실패가 요약에 안 보였음)
   if (je.length) out.push(`${jd.length?'':'\n'}[AI 채점 실패] ${je.length}개 · ${[...new Set(je.map(x=>x.judgeErr.split(' · ')[0]))].join(', ')} · 예: ${je[0].judgeErr}`);
@@ -1566,7 +1595,7 @@ function evSummary(){
   const flip=it.filter(x=>x.prevMark && x.mark && x.prevMark!==x.mark); if (flip.length) out.push(`[지난번과 달라짐] ${flip.map(x=>`${it.indexOf(x)+1}번 ${x.prevMark==='ok'?'✓→✗':'✗→✓'}`).join(', ')}`);
   const line=(x,i,deep)=>{ if (x.status!=='ok') return `${i+1}. ${x.link} — ${x.status==='fail'?'실패: '+x.err:'분석 안 함'}`;
     const f=x.info, l=[`${i+1}. ${x.link} — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초)${x.mark==='ng'?` ✗ ${(x.why||[]).map(w=>(EV_WHY.find(y=>y[0]===w)||[,w])[1]).join(', ')||'이유 없음'}`:x.mark==='ok'?' ✓':''}${x.memo?` / 메모: ${x.memo}`:''}`];
-    if (x.judge) l.push(`   AI 채점 ${x.judge.pass?'맞음':'틀림'}: ${judgeLine(x.judge)}${EV_CRIT.filter(([k])=>!x.judge.criteria[k].pass).map(([k,lb])=>` | ${lb}: ${x.judge.criteria[k].reason||''}`).join('')}`);
+    if (x.judge) l.push(`   AI 채점 ${x.judge.pass?'맞음':'틀림'}: ${judgeLine(x.judge)}${EV_CRIT.filter(([k])=>!x.judge.criteria[k].pass).map(([k,lb])=>` | ${lb}: ${x.judge.criteria[k].reason||''}`).join('')}${x.judge.learn?` | ${LEARN_TXT(x.judge.learn)}`:''}`);
     if (f){ l.push(`   자료: ${evHave(f)} | 근거: ${evUsed(f)} | 추정 ${f.est}/${f.nAll} | 확신 ${f.conf||'-'}${f.auto?` | 자동검사 ${f.auto.checked-f.auto.bad.length}/${f.auto.checked}${f.auto.bad.length?' 다름: '+f.auto.bad.join(', '):''}`:''}`);
       if (deep){ if (f.evSubs) l.push(`   AI가 읽은 자막: ${f.evSubs}`); if (f.evSpeech) l.push(`   AI가 들은 음성: ${f.evSpeech}`); if (f.cmUsed.length) l.push(`   쓴 댓글: ${f.cmUsed.join(', ')}`); } }
     return l.join('\n'); };

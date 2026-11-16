@@ -4,6 +4,7 @@
 import { getReelMeta, downloadVideo, shortcodeOf, CDN_OK, qtyCount } from '../lib/instagram.js';
 import { cacheGet, cachePut, cachePatch } from '../lib/db.js';
 import { generate, uploadVideo, deleteVideo, videoPart, FILE_URI, MODELS } from '../lib/gemini.js';
+import { activeLessons, lessonVersion, lessonBlock } from '../lib/lessons.js';
 import { bumpUsage } from '../lib/usage.js';
 import { verifyUser } from '../lib/auth.js';
 import { DAILY_LIMIT, kstMidnight, isTester, whoOf, usedToday, addUse, logFailure, cleanupMaybe } from '../lib/quota.js';
@@ -11,13 +12,13 @@ import { recordOutcome } from '../lib/stats.js';
 
 // Vercel 무료(Hobby) 플랜 최대 300초
 export const config = { maxDuration: 300 };
-const CACHE_V = 4;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
+const CACHE_V = 5;              // 분석 방식이 바뀌면 올린다 → 예전 캐시는 무시하고 다시 분석
 const MAX_IMAGES = 24;
 const MAX_IMAGE_B64 = 1_500_000;
 const DEADLINE_MS = () => +process.env.ANALYZE_DEADLINE_MS || 270_000;   // Vercel 300초 제한 전에 스스로 정리 (테스트에서만 바꿈)
 const MAX_HOPS = 3;   // 시간이 모자라면 "이어서 분석"을 최대 3번까지(한 번에 약 4분 30초씩)
 
-function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanLog = null }) {
+function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanLog = null, lessons = [] }) {
   const owner = comments.filter(c => c.owner), viewer = comments.filter(c => !c.owner);
   const fmt = list => list.map((c, i) => `(${i + 1})${c.likes ? ` [좋아요 ${c.likes}]` : ''} ${c.text}`).join('\n');
   return `너는 요리 초보를 위한 레시피 정리 전문가다. 인스타그램 릴스 자료를 보고, 그 안에 있는 레시피를 빠짐없이 찾아 그대로 따라 할 수 있게 JSON으로만 출력하라.
@@ -29,7 +30,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanL
 - caption: 캡션에 레시피가 직접 적혀 있으면 "레시피", "레시피는 댓글/프로필에" 같은 안내만 있으면 "안내", 요리 내용이 없으면 "없음".
 - comments_used: 실제로 레시피에 반영한 댓글 번호(예: "작성자 1", "시청자 3"). 안 썼으면 빈 배열.
 
-[2단계 — 자료 판단 규칙]
+${lessonBlock(lessons)}[2단계 — 자료 판단 규칙]
 - 작성자 캡션과 [작성자 댓글]은 공식 레시피다. 캡션이 "레시피는 댓글에"라고 하면 작성자 댓글에서 찾는다.
 - [시청자 댓글]은 대부분 질문("레시피 알려주세요"), 칭찬, 자기 경험("저는 설탕 뺐어요"), 다른 요리 이야기다. 아래 세 가지를 모두 만족할 때만 보충 근거로 쓰고, 그 재료는 estimated를 true로 한다.
   (a) 이 영상과 같은 요리다 (b) 구체적인 재료·분량이 있다 (c) 영상·자막·캡션과 모순되지 않는다.
@@ -40,6 +41,7 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanL
 - 자막·캡션에 없어도 영상에 보이는 기본 동작(팬에 기름 두르기, 물 끓이기, 팬 달구기, 버터 녹이기)은 단계로 넣고, 그 재료(식용유 등)도 재료에 넣는다(buy false, 분량을 모르면 orig_unit "약간"이나 "적당히").
 - 조리 방법(튀기기·삶기·데치기·굽기·볶기)은 영상 속 액체와 모습에 맞춘다. 기름에 잠겨 지글거리며 거품이 나면 튀기기, 맑은 물이 끓으면 삶기·데치기. 헷갈리면 장면 기록의 액체 설명을 따른다.
 - 외국어 레시피는 한국 사람이 쓰는 자연스러운 요리 말로 옮긴다(제목·재료 이름·단계 모두 한국어. 번역투 금지, 예: "combine"→"섞는다"). 계량은 한국식으로: cup→"컵"(계량컵 240ml), tbsp·Tbsp→"큰술", tsp→"작은술"은 숫자를 그대로 두고 단위 이름만 바꾸고, oz→g(×28), lb→g(×454), 버터 1 stick→113g, °F→°C(5단위 반올림)는 바꿔 적고 원래 표기는 original에 남긴다.
+- 분량이 범위로 적혀 있으면("5-6숟갈", "2~3개") orig_qty에 작은 값, orig_qty_max에 큰 값을 넣는다(가운데 값 5.5처럼 새 숫자를 만들지 않는다).
 - 요리·음식을 만드는 영상이 아니면(먹방, 맛집 소개, 광고만 등) is_food를 false, recipes를 빈 배열로 하고 reason에 이유를 한 줄로.
 
 [3단계 — 레시피가 여러 개인 경우]
@@ -65,7 +67,8 @@ function buildPrompt({ caption, comments, link, nImg, fromVideo, hasVideo, scanL
 - 분량이 말로 된 재료(orig_qty null)는 앱이 이름만 보여 주므로 그 표현을 문장에 쓴다. 예: "[[5]]를 듬뿍 바른다", "[[6]]를 약간 뿌린다".
 - 조사는 [[번호]] 바로 뒤에 붙인다(앱이 받침에 맞게 을/를·이/가를 고친다).
 - 익힘 정도·불 세기·시간 표현은 자료의 말을 그대로 쓴다("적당히 익힌다"를 "살짝 익힌다"로 바꾸지 않는다).
-- heat: "약불","중불","강불","불 끔","없음" 중 하나. seconds: 그 단계 소요 시간(초).
+- heat: 가스레인지·인덕션 단계는 "약불","중불","강불","불 끔" 중 하나. 에어프라이어·오븐·전자레인지 단계는 불 세기 대신 온도나 출력("170도", "200도", "700W")을 쓰고, 모르면 "없음". 불을 쓰지 않는 단계는 "없음". seconds: 그 단계 소요 시간(초).
+- 단계 순서는 영상에 나오는 실제 순서(장면 시각 순서)를 따른다. 재료 이름에 "삶은·구운" 같은 말이 있어도 영상에서 자른 뒤 삶았으면 그 순서대로 쓴다.
 - cue: 다음 단계로 넘어가도 되는 상태(눈으로 확인 가능하게). tip: 초보 팁 한 문장. mistake: 흔한 실수 한 문장(없으면 "").
 - 문장은 짧게, 한 단계에 한 동작 위주로.
 - 영상이 있으면 모든 단계에 clip을 넣는다. 장면 기록이 있으면 그 단계 동작이 나오는 장면 시각을 쓰고, 여러 장면에 걸치면 처음 장면 시작~마지막 장면 끝. 영상 길이를 넘는 시각은 쓰지 않는다.
@@ -80,7 +83,7 @@ ${hasVideo ? `- cover_time: 완성된 음식(그릇·접시에 담긴 결과물)
 출력 JSON(이 키만, 값이 없거나 null인 키는 생략해도 된다):
 {"is_food":true,"reason":"","evidence":{"speech":"","onscreen_text":"","caption":"레시피|안내|없음","comments_used":[]},
 "recipes":[{"title":"","summary":"한 줄",${hasVideo ? '"cover_time":"00:41",' : ''}${nImg ? '"cover_frame":3,' : ''}"servings":2,"difficulty":"쉬움|보통|어려움","total_min":15,"confidence":"high|medium|low","sources":["caption"],"assumptions":[""],
-"ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
+"ingredients":[{"name":"","group":"주재료|양념|소스|기타","original":"","orig_qty":2,"orig_qty_max":null,"orig_unit":"숟갈","prep":"","grams":0,"ml":null,"count":null,"count_unit":null,"primary":"g|ml|count","estimated":false,"buy":true,"brand":"","buy_keyword":""}],
 "steps":[{"text":"","heat":"중불","seconds":60,"cue":"","tip":"","mistake":""${hasVideo ? ',"clip":{"start":"00:05","end":"00:09"},"photo":"00:08"' : ''}${nImg ? ',"frame":0' : ''}}],
 "tools":[{"name":"","buy_keyword":""}],
 "nutrition_per_serving":{"kcal":0,"carb_g":0,"protein_g":0,"fat_g":0,"sugar_g":0,"sodium_mg":0},
@@ -175,10 +178,12 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
     body.noCache = true;
   }
 
-  // ⚡ 캐시: 같은 방식(CACHE_V)으로 분석한 결과만 바로 돌려준다
+  // 배운 규칙(v1.14): 채점에서 틀린 것을 일반 규칙으로 정리해 둔 것. 지시문에 넣는다
+  const lessons = await activeLessons(), lv = lessonVersion(lessons);
+  // ⚡ 캐시: 같은 방식(CACHE_V)·같은 배운 규칙(lv)으로 분석한 결과만 바로 돌려준다(규칙이 늘면 예전 분석은 새로 분석)
   if (code && !images.length && !body.noCache && !R) {
     const hit = await cacheGet(code);
-    if (hit && hit.recipe && hit.source && hit.source.v === CACHE_V) {
+    if (hit && hit.recipe && hit.source && hit.source.v === CACHE_V && (hit.source.lv || '') === lv) {
       emit({ stage: 'cached' });
       cachePatch(code, { hits: (hit.hits || 0) + 1 });
       bumpUsage('cache', { ok: 1 });
@@ -246,14 +251,14 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
     : [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: 'medium' }, ...(visual ? { mediaResolution: 'MEDIA_RESOLUTION_HIGH' } : {}) }, meta: true },
        { gen: JSONC, meta: false }];
 
-  const prompt = buildPrompt({ caption, comments, link, nImg: images.length, fromVideo, hasVideo: !!video });
+  const prompt = buildPrompt({ caption, comments, link, nImg: images.length, fromVideo, hasVideo: !!video, lessons });
   const buildParts = cfg => {
     const parts = [{ text: prompt }];
     if (video) parts.push(videoPart(video, cfg.meta && fps && fps !== 1 ? { fps } : null));
     for (const im of images) parts.push({ inline_data: { mime_type: im.mime, data: im.data } });
     return parts;
   };
-  const source = { v: CACHE_V, mode: null, owner, videoUrl: video && CDN_OK.test(videoUrl || '') ? videoUrl : null, duration, gotCaption: !!caption, gotComments: comments.length,
+  const source = { v: CACHE_V, lv, mode: null, owner, videoUrl: video && CDN_OK.test(videoUrl || '') ? videoUrl : null, duration, gotCaption: !!caption, gotComments: comments.length,
     ownerComments: comments.filter(c => c.owner).length, gotVideo: !!video, visualOnly: !strongText && visual, fps, caption: caption.slice(0, 3000), comments: showComments(comments), notes };
   emit({ stage: 'analyze', visualOnly: source.visualOnly, longVideo: dur > 90, gotVideo: !!video, videoMB: video ? +(video.bytes / 1048576).toFixed(1) : 0 });
 
@@ -281,7 +286,7 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
     }
     if (log.is_cooking === false) return { ok: true, model: sc.model, mode: 'two_stage', text: JSON.stringify({ is_food: false, reason: log.reason || '요리 과정이 나오지 않는 영상', recipes: [] }) };
     emit({ stage: 'compose', scenes: (log.scenes || []).length });
-    const p2 = buildPrompt({ caption, comments, link, nImg: 0, fromVideo: false, hasVideo: true, scanLog: log });
+    const p2 = buildPrompt({ caption, comments, link, nImg: 0, fromVideo: false, hasVideo: true, scanLog: log, lessons });
     const out2 = await generate({ key, cfgs: [{ gen: { ...JSONC, thinkingConfig: { thinkingLevel: lite ? 'low' : 'medium' } } }, { gen: JSONC }], buildParts: () => [{ text: p2 }], validate, emit, left, log: notes, meter, models: order });
     if (out2.ok) out2.mode = 'two_stage';
     return out2;
@@ -317,7 +322,8 @@ export async function run(body, emit, t0, req, ident = null, meter = { tin: 0, t
   source.mode = out.mode || 'single';
   const usesLeft = await countUse();
   if (!result.recipes.length) return { status: 200, json: { text: JSON.stringify(result), model: out.model, source, noRecipe: true, notes, left: usesLeft, tester } };
-  if (code && !images.length) {
+  // 가벼운 모델(lite)이 만든 결과는 저장하지 않는다(정확도 우선: 다음에 더 좋은 모델로 다시 분석. 5회차 와규 파스타 누락)
+  if (code && !images.length && !/lite/.test(out.model || '')) {
     const { notes: _n, comments: _c, ...src } = source;   // 시청자 댓글 원문은 캐시에 남기지 않음(개인정보 최소화)
     await cachePut(code, { recipe: result, source: src, video_url: source.videoUrl, model: out.model });
   }
