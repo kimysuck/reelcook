@@ -190,3 +190,9 @@ pre{font-size:22px;line-height:1.7}
 .t2 .rt{font-size:25px}.t2 .dayno b{font-size:78px}.t2 h2{font-size:50px}.t2 .tb td{padding:10px 12px 10px 0}.t2 .tb2{margin-bottom:14px}
 .t3 .rt{font-size:24px;line-height:1.48}.t3 .r{padding:13px 24px 15px}.t3 .tb{font-size:23px}
 .cover .bars i:nth-child(3){background:#fff}
+/* v2.1: 흐름도·지도 글씨도 본문 수준으로 */
+.ab{font-size:24px;padding:22px 28px}.ab b{font-size:31px;margin-bottom:2px}
+.tri .ab b{font-size:28px}
+.ar{font-size:26px;margin:2px 0}
+.m .p{font-size:25px;line-height:1.5}.m .f{font-size:28px}.m .f span{font-size:22px;line-height:1.4}
+.map{gap:18px}
