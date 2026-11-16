@@ -1,5 +1,5 @@
 // 오늘의 AI 사용량 (설정 화면용). 무료 한도 숫자는 Google이 API로 주지 않아 AI Studio 링크를 함께 준다.
-import { todayUsage, pacificDay, nextReset, usageSince } from '../lib/usage.js';
+import { todayUsage, prevUsage, pacificDay, nextReset, usageSince } from '../lib/usage.js';
 import { statsSince, feedbackSummary, saveFeedback } from '../lib/stats.js';
 import { costUSD, KRW_PER_USD, PRICE_DATE } from '../lib/pricing.js';
 import { ownerOf } from '../lib/jobs.js';
@@ -27,7 +27,9 @@ export default async function handler(req, res) {
     const used = await usedToday(whoOf(req, user));
     return res.status(200).json({ tester: false, dailyLimit: DAILY_LIMIT, used, left: Math.max(0, DAILY_LIMIT - used), resetAt: kstMidnight().toISOString() });
   }
-  const [rows, fails, st7, use7, fb] = await Promise.all([todayUsage(), recentFailures(10), statsSince(7), usageSince(7), feedbackSummary()]);
+  const [rows0, fails, st7, use7, fb] = await Promise.all([todayUsage(), recentFailures(10), statsSince(7), usageSince(7), feedbackSummary()]);
+  // 무료 한도는 한국 시간 오후 4~5시(미국 서부 0시)에 새 날로 넘어간다 → 그 직후 오늘 칸이 비면 지난 하루 기록을 보여 준다
+  const prev = rows0.length ? false : true, rows = rows0.length ? rows0 : await prevUsage();
   // 운영 지표 (F-A1): 오늘 · 최근 7일
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
   const agg = list => { const g = k => list.filter(r => r.kind === k); const sum = (k, f) => g(k).reduce((a, r) => a + Number(r[f]), 0);
@@ -50,7 +52,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     day: pacificDay(), resetAt: nextReset().toISOString(), models: MODELS,
     rows: rows.map(r => ({ model: r.model, calls: r.calls, ok: r.ok, busy: r.busy, limited: r.limited, tin: r.tokens_in, tout: r.tokens_out, exhausted: r.day_exhausted, lastError: r.last_error })),
-    tracking: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY),
+    tracking: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY), prev: prev && rows.length > 0,
     studio: 'https://aistudio.google.com/usage?timeRange=last-28-days&tab=rate-limit',
     dailyLimit: DAILY_LIMIT, failures: fails, tester: true, ops, cost, feedback: fb,   // 평가 모드·사용량 화면은 테스터에게만 보인다
   });
