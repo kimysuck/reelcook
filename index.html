@@ -485,6 +485,13 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 .gsteps{list-style:none;counter-reset:g;margin-top:14px}.gsteps li{counter-increment:g;position:relative;padding:12px 0 12px 40px;border-bottom:1px solid var(--line2)}
 .gsteps li::before{content:counter(g);position:absolute;left:0;top:12px;width:26px;height:26px;border-radius:50%;background:var(--pri);color:#fff;font-weight:700;font-size:.85rem;display:flex;align-items:center;justify-content:center}
 .gsteps b{display:block}.gsteps span{display:block;color:var(--ink2);font-size:.9rem;margin-top:2px}
+/* v1.12: 원작자 표시 · 사용 후기 · 운영 지표 */
+.credit{margin-top:6px;font-size:.86rem;color:var(--sub)}.credit a{color:var(--ink2);font-weight:700}
+.survey .sq{padding:10px 0;border-bottom:1px solid var(--line2);font-size:.9rem}.survey .sv{display:flex;gap:6px;margin-top:6px}
+.survey .sv button{flex:1;min-height:36px;border:1.5px solid var(--line);border-radius:8px;font-weight:700;color:var(--ink2)}
+.survey .sv button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.survey .opt.ck{flex-wrap:wrap}.survey .opt.ck button{flex:1 1 30%;min-height:38px;font-size:.84rem}
+.usage.ops td:first-child{font-weight:700}
 /* 줄바꿈 다듬기 (v1.10): 한 줄을 꽉 채우고 다음 줄에 조금만 남는 모양을 피한다 */
 body{text-wrap:pretty}
 p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.install,.login-card,.ailabel span,.serv .lbl small,.cue span,.tip span,.mis span,.muted,label.fl,.tile .t,.post .tt{text-wrap:balance}
@@ -516,7 +523,7 @@ p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.instal
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.11';
+const VERSION='v1.12';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -991,7 +998,7 @@ async function analyze(opts={}){
     if (!list.length){ S.errCode=['no_recipe', src0(data), ...(data.notes||[])].filter(Boolean).join(' · '); }
     if (!list.length) throw new Error(res.is_food===false ? `요리를 만드는 릴스가 아닌 것 같아요${res.reason?` (${res.reason})`:''}. 요리 과정이 나오는 릴스를 공유해 주세요.` : '이 릴스에서 레시피를 찾지 못했어요. 캡션을 직접 붙여넣거나 다른 릴스로 시도해 주세요.');
     const src=data.source||{}, ev=res.evidence||{};
-    const base={cached:!!src.cached, link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
+    const base={owner:src.owner||null, cached:!!src.cached, link:S.link.trim(), caption:src.caption||S.caption.trim(), comments:src.comments||[], model:data.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, frames:S.fromVideo, sec:Math.round((Date.now()-S.t0)/1000), videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
     const set=list.map(r=>{ const rec=normalize(r); rec.source={...base}; return rec; });
     // 갤러리 영상/스크린샷으로 분석한 경우: 이미지 번호 → 장면
     let localVideo=null, useShots=false;
@@ -1217,6 +1224,7 @@ function viewRecipe(){
     ${r.cover?`<div class="hero"><img src="${esc(r.cover)}" alt="${esc(r.title)} 완성 장면"><button class="back" id="back">${IC.back}뒤로</button>${S.media&&S.media.status==='ready'&&(S.media.thumbs||[]).some(Boolean)?`<button class="hbtn" id="pickCover">${IC.image}표지 바꾸기</button>`:''}</div>`:`<button class="back" id="back">${IC.back}뒤로</button>`}
     ${pick}
     <h1>${esc(r.title)}</h1>
+    ${src.link?`<div class="credit">${src.owner?`원작자 <a href="https://www.instagram.com/${esc(src.owner)}/" target="_blank" rel="noopener">@${esc(src.owner)}</a> · `:''}<a href="${esc(src.link)}" target="_blank" rel="noopener">원본 릴스 보기</a></div>`:''}
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
     ${(()=>{ const n=r.ingredients.filter(i=>i.estimated&&!isWordAmt(i)).length; return n?`<button class="estsum" id="estJump">${IC.alert}확인이 필요한 재료 ${n}개 · 화면 보고 추정</button>`:''; })()}
     <div class="ailabel"><b>${r.edited?'AI 정리 + 직접 고침':'AI 정리'}</b><span>AI가 릴스를 보고 만든 레시피${r.edited?'를 내가 직접 고쳤어요':'예요'}. 분량, 시간, 영양은 틀릴 수 있어요.${srcText(r)?`<br>근거: ${srcText(r)}`:''}</span></div>
@@ -1485,7 +1493,7 @@ async function evOne(x){
     else { const res=parseJSON(d.text), list=(Array.isArray(res.recipes)?res.recipes:[]).filter(r=>r&&Array.isArray(r.ingredients)&&r.ingredients.length);
       if (!list.length){ x.status='fail'; x.err=res.is_food===false?`요리 아님${res.reason?` (${res.reason})`:''}`:'레시피를 찾지 못함'; }
       else { const src=d.source||{}, ev=res.evidence||{};
-        const base={cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
+        const base={owner:src.owner||null, cached:!!src.cached, link:x.link, caption:src.caption||'', comments:src.comments||[], model:d.model, gotVideo:!!src.gotVideo, visualOnly:!!src.visualOnly, sec:x.sec, videoUrl:src.videoUrl||null, duration:src.duration||null, speech:ev.speech?1:0, subs:ev.onscreen_text?1:0};
         Object.assign(x,{status:'ok', cached:!!src.cached, mode:src.cached?'cache':(src.mode||''), model:d.model||'', titles:list.map(r=>r.title||'?'), nIng:list[0].ingredients.length, nStep:(list[0].steps||[]).length,
           info:evInfo(d,res,list), recipes:list.map(r=>({...r, source:base}))}); } }
   }catch(e){ if (!x.job){ x.status='wait'; x.err=''; x.stage=''; } evStop=true; toast(x.job?'인터넷 연결이 끊겼어요. 분석은 서버에서 계속되니, 연결되면 평가 모드를 다시 열어 주세요':'인터넷 연결이 끊겨서 멈췄어요. "이어서 분석"을 눌러 주세요'); delete x.live; evSave(); evDraw(); return; }
@@ -1784,7 +1792,7 @@ function renderWho(){
 }
 async function initCloud(){
   try{
-    const c=await (await fetch('/api/config')).json(); S.pushKey=c.push||null;
+    const c=await (await fetch('/api/config')).json(); S.pushKey=c.push||null; S.avgSec=c.avgSec||null;
     if (!c.supabase || !window.supabase) return;
     sb=window.supabase.createClient(c.supabase.url, c.supabase.key, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'pkce'}});
     sb.auth.onAuthStateChange((ev, session)=>{ setTimeout(()=>onSession(session), 0); });
@@ -2055,7 +2063,7 @@ $('#setBtn').onclick=()=>{
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
     <label class="fl">오늘 분석</label><div id="quotaLine" class="muted">확인하는 중…</div>
     ${S.tester?`<label class="fl">AI 사용량 (테스터 전용)</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>`:''}
-    <label class="fl">도움말</label><button class="btn ghost sm" id="guideBtn">사용 방법 다시 보기</button>
+    <label class="fl">도움말</label><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" id="guideBtn">사용 방법 다시 보기</button><button class="btn ghost sm" id="surveyBtn">사용 후기 남기기</button></div>
     ${S.tester?`<label class="fl">평가 모드 (테스터 전용)</label><button class="btn ghost sm" id="evalBtn">분석 품질 평가하기</button>`:''}
     <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
     <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
@@ -2065,6 +2073,7 @@ $('#setBtn').onclick=()=>{
   $('#wd').onclick=withdraw;
   const ub0=$('#usageBtn'); if (ub0) ub0.onclick=showUsage;
   $('#guideBtn').onclick=()=>showGuide();
+  $('#surveyBtn').onclick=()=>showSurvey();
   (async()=>{ const el=$('#quotaLine'); try{ const r=await fetch('/api/usage',{headers:await jobHeaders()}); const d=await r.json(); if (!el||!el.isConnected) return;
     el.textContent = d.tester ? '테스터 계정이라 횟수 제한이 없어요' : r.ok ? `오늘 남은 분석 ${d.left}회 / ${d.dailyLimit}회 · 이미 분석된 릴스는 횟수를 쓰지 않아요` : '확인하지 못했어요';
   }catch(e){ if (el) el.textContent='확인하지 못했어요'; } })();
@@ -2086,8 +2095,8 @@ $('#setBtn').onclick=()=>{
 
 /* ================= 약관 동의 =================
    ⚠ 기능을 추가·변경하면 legal.html과 TERMS_VERSION을 함께 고친다 → 모든 이용자가 다시 동의 */
-const TERMS_VERSION='2026-11-23';
-const TERMS_CHANGES='분석이 끝나면 알림을 받을 수 있게 하고(켠 경우만), 앱을 닫아도 서버가 분석을 끝까지 하도록 바꿨어요. 저장한 레시피 직접 수정과 "결과가 이상해요"도 더했어요(11월 23일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
+const TERMS_VERSION='2026-11-24';
+const TERMS_CHANGES='레시피에 원작자 계정을 표시하고, 앱 사용 후기(선택, 1년 보관)를 남길 수 있게 했어요. 분석 완료 알림과 앱을 닫아도 이어지는 분석도 더했어요(11월 24일 시행).';   // 바뀐 약관을 다시 동의받을 때 화면에 보여 줄 한 줄 요약
 let legalDoc=null;
 async function loadLegal(){
   if (legalDoc) return legalDoc;
@@ -2122,7 +2131,8 @@ function showGate(){
         <tr><td>릴스 링크, 공개 캡션·댓글, 넣은 글·사진·영상</td><td>레시피 분석</td><td>분석 후 바로 폐기</td></tr>
         <tr><td>분석 횟수(계정 또는 IP 변환값)</td><td>하루 10회 제한</td><td>3일</td></tr>
         <tr><td>분석 작업(링크·진행 상황·결과)</td><td>앱을 닫아도 분석 이어서 하기</td><td>결과를 받으면 삭제, 최대 3일</td></tr>
-        <tr><td>알림 받을 주소(알림을 켠 경우)</td><td>분석 완료 알림</td><td>분석 작업과 함께 삭제</td></tr></table>
+        <tr><td>알림 받을 주소(알림을 켠 경우)</td><td>분석 완료 알림</td><td>분석 작업과 함께 삭제</td></tr>
+        <tr><td>사용 후기(남긴 경우)</td><td>앱 개선</td><td>1년</td></tr></table>
         <span style="display:block;font-size:.8rem;color:var(--sub);margin-top:6px">계정과 저장 데이터는 Supabase 서울 서버에 보관해요. 분석과 앱 운영을 위해 Google(미국), Vercel(미국), Apify(체코)로 정보가 옮겨져요. 알림을 켜면 암호화된 알림이 Google 푸시 서비스(미국)를 거쳐 와요. 동의하지 않을 수 있지만, 그러면 앱을 쓸 수 없어요.</span>`)}
     </div>
     <p class="muted" style="font-size:.8rem;margin-top:14px">동의는 설정의 "동의 철회 및 데이터 삭제"로 언제든 철회할 수 있어요.</p>
@@ -2180,11 +2190,26 @@ async function showUsage(){
       ${d.tracking&&!(d.rows||[]).length?'<div class="note" style="margin-top:10px">아직 기록이 없어요. Supabase에서 update-v1.3.sql을 실행했는지 확인해 주세요.</div>':''}
       <a class="btn ghost" style="width:100%;margin-top:14px;text-decoration:none" href="${esc(d.studio)}" target="_blank" rel="noopener">AI Studio에서 한도 보기</a>
       <p class="muted" style="font-size:.8rem;margin-top:14px">한 사람당 하루 분석 ${d.dailyLimit||10}회(한국 시간 0시에 다시 채워짐). 테스터 계정은 제한이 없어요.</p>
+      ${opsHTML(d)}
       <label class="fl">서버 분석 (앱을 꺼도 분석)</label><div id="jdiag" class="muted" style="font-size:.86rem">확인하는 중…</div>
       <label class="fl">최근 실패 ${(d.failures||[]).length}건</label>
       ${(d.failures||[]).length?`<div class="fails">${d.failures.map(f=>`<div><b>${esc(f.error)}</b> <span class="muted">${esc(new Date(f.at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}${f.sec?`, ${f.sec}초`:''}</span><div class="muted" style="font-size:.74rem;word-break:break-all">${esc([f.reel_code, f.mode, ...(f.notes||[])].filter(Boolean).join(' · '))}</div></div>`).join('')}</div>`:'<p class="muted" style="font-size:.84rem">최근 실패가 없어요.</p>'}`;
     jobDiag(box.querySelector('#jdiag'));
   }catch(e){ ub.textContent=e.message||'불러오지 못했어요.'; }
+}
+function opsHTML(d){
+  const o=d.ops||{}, t=o.today||{}, w=o.week||{}, c=d.cost||{}, f=d.feedback||{};
+  const pct=v=>v==null?'-':v+'%', sec=v=>v==null?'-':v+'초', won=v=>v==null?'-':'₩'+v.toLocaleString('ko-KR');
+  return `<label class="fl">운영 지표</label>
+    <table class="usage ops"><tr><th></th><th>분석</th><th>실패율</th><th>평균 시간</th><th>Apify</th></tr>
+      <tr><td>오늘</td><td>${t.ok||0}${t.cached?` <span class="muted small">+저장 ${t.cached}</span>`:''}</td><td>${pct(t.failRate)}</td><td>${sec(t.avgSec)}</td><td>${t.apify||0}</td></tr>
+      <tr><td>7일</td><td>${w.ok||0}${w.cached?` <span class="muted small">+저장 ${w.cached}</span>`:''}</td><td>${pct(w.failRate)}</td><td>${sec(w.avgSec)}</td><td>${w.apify||0}</td></tr></table>
+    <label class="fl">비용 (유료 등급이라면, 최근 7일 기준)</label>
+    <div class="muted" style="font-size:.86rem">${c.per?`분석 1건당 입력 ${(c.per.tin/1000).toFixed(1)}k · 출력 ${(c.per.tout/1000).toFixed(1)}k 토큰 → <b>${won(c.per.nowKrw)}</b>${c.per.nowKrw!==c.per.listKrw?` (정가 ${won(c.per.listKrw)})`:''}`:'아직 분석 기록이 없어요'}
+      <div class="small">요금 기준일 ${esc(c.priceDate||'-')} · 환율 ${c.rate||'-'}원${(c.unpriced||[]).length?` · 요금표에 없는 모델 ${esc(c.unpriced.join(', '))}은 빼고 계산`:''}</div></div>
+    <label class="fl">사용 후기</label>
+    <div class="muted" style="font-size:.86rem">${f.n?`${f.n}명 · SUS 평균 <b>${f.sus}</b>점${f.cook!=null?` · 요리 시작까지 평균 ${f.cook}분`:''}`:'아직 후기가 없어요. 테스터에게 앱 주소 끝에 ?survey=1 을 붙여 보내 주세요'}
+      ${(f.recent||[]).map(x=>`<div class="small" style="margin-top:4px">“${esc(x.text)}”</div>`).join('')}</div>`;
 }
 async function jobDiag(el){
   if (!el) return;
@@ -2338,6 +2363,30 @@ function showGuide(){
 }
 // 처음 한 번만. 인스타 "공유"로 처음 열렸으면 분석부터 보여 주고 다음에 켤 때 안내한다
 function maybeGuide(){ if (!LS.get('rc_guided',false) && !/[?&](share|job|eval)=/.test(location.search) && !$('#layer').innerHTML.trim()) showGuide(); }
+/* ---------- 사용 후기 (F-J2): SUS 10문항 + 요리 시작까지 걸린 시간 + 한마디. 익명, 이 폰에서 한 번 ---------- */
+const SUS_Q=['이 앱을 자주 쓰고 싶다','쓸데없이 복잡하다','쓰기 쉽다','쓰려면 다른 사람의 도움이 필요할 것 같다','기능들이 잘 어우러져 있다',
+  '앞뒤가 안 맞는 부분이 많다','대부분의 사람이 금방 익힐 것 같다','쓰기 번거롭다','쓰면서 자신감이 있었다','쓰기 전에 배워야 할 것이 많았다'];
+const COOK_OPT=[['5','5분 안'],['10','10분 안'],['30','30분 안'],['60','1시간 안'],['120','그보다 오래'],['','아직 안 해 봄']];
+function showSurvey(){
+  if (LS.get('rc_survey_done',false)){ toast('이미 후기를 남겨 주셨어요. 고마워요'); return; }
+  const a=Array(10).fill(0);
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet survey"><div class="row" style="justify-content:space-between"><h3>사용 후기</h3><button class="x" id="svx" aria-label="닫기">${IC.x}</button></div>
+    <p class="muted small" style="margin-top:4px">1분이면 돼요. 이름 없이 저장되고 1년 뒤 지워져요. 1 = 전혀 아니다, 5 = 매우 그렇다</p>
+    ${SUS_Q.map((q,i)=>`<div class="sq"><span>${i+1}. ${q}</span><div class="sv">${[1,2,3,4,5].map(v=>`<button data-sq="${i}:${v}" aria-label="${v}점">${v}</button>`).join('')}</div></div>`).join('')}
+    <label class="fl">릴스를 보고 요리를 시작하기까지</label><div class="opt ck">${COOK_OPT.map(([v,l])=>`<button data-ck="${v}">${l}</button>`).join('')}</div>
+    <label class="fl">한마디 (선택)</label><textarea id="svText" maxlength="200" style="min-height:70px" placeholder="좋았던 점, 불편했던 점 (이름·연락처는 적지 말아 주세요)"></textarea>
+    <button class="btn pri" id="svGo" style="width:100%;margin-top:14px" disabled>보내기</button><div id="sverr"></div></div></div>`;
+  let ck=null;
+  const sync=()=>{ $('#svGo').disabled=a.some(v=>!v); };
+  document.querySelectorAll('[data-sq]').forEach(b=>b.onclick=()=>{ const [i,v]=b.dataset.sq.split(':').map(Number); a[i]=v;
+    b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); sync(); });
+  document.querySelectorAll('[data-ck]').forEach(b=>b.onclick=()=>{ ck=b.dataset.ck; document.querySelectorAll('[data-ck]').forEach(x=>x.classList.toggle('on',x===b)); });
+  $('#svx').onclick=()=>{ $('#layer').innerHTML=''; };
+  $('#svGo').onclick=async()=>{ $('#svGo').disabled=true;
+    try{ const r=await fetch('/api/usage',{method:'POST', headers:{'Content-Type':'application/json', ...await jobHeaders()}, body:JSON.stringify({feedback:{sus:a, cook:ck===null||ck===''?null:+ck, comment:$('#svText').value}})});
+      if (r.ok || r.status===409){ LS.set('rc_survey_done',true); $('#layer').innerHTML=''; toast(r.ok?'후기를 보냈어요. 고마워요':'이미 후기를 남겨 주셨어요'); return; }
+      throw new Error(); }catch(e){ $('#svGo').disabled=false; $('#sverr').innerHTML='<div class="err">보내지 못했어요. 잠시 뒤 다시 눌러 주세요.</div>'; } };
+}
 function resumeJob(){
   const j=LS.get('rc_job',null); if (!j || !j.id || Date.now()-j.at>3*86400e3){ LS.set('rc_job',null); return false; }
   S.tab='import'; S.recipe=null; resetInput(); S.link=j.link; analyze({jobId:j.id, replaceId:j.replaceId, t0:j.at}); return true;
@@ -2364,7 +2413,7 @@ if (!consented()) showGate();
 pushGuard();
 if (new URLSearchParams(location.search).has('share')) whenConsented(readShareInbox);
 else whenConsented(()=>{ if (!resumeJob()) resumeLast(); });
-whenConsented(()=>setTimeout(maybeGuide, 400));
+whenConsented(()=>setTimeout(()=>{ if (/[?&]survey=1/.test(location.search)){ LS.set('rc_guided',true); showSurvey(); } else maybeGuide(); }, 400));
 whenConsented(()=>setTimeout(resumeEvalJobs, 300));
 initCloud();
 </script>
