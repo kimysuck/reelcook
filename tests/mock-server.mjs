@@ -73,8 +73,10 @@ globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
     if(m==='PATCH'){ const p=JSON.parse(opts.body); LESSONS.filter(l=>l.id===id).forEach(l=>Object.assign(l,p)); return {ok:true,status:200,json:async()=>LESSONS.filter(l=>l.id===id)}; }
     let out=LESSONS.slice(); if(url.includes('active=eq.true')) out=out.filter(l=>l.active); return {ok:true,status:200,json:async()=>out}; }
   if(url.includes('/rest/v1/ai_usage')) return {ok:true,status:200,json:async()=>Object.values(st.usage)};
-  if(url.includes('generativelanguage') && !opts.body.includes('콘텐츠 검토') && st.script.length){
-    const sc=st.script.shift(); const model=(url.match(/models\/([^:]+):/)||[])[1]; const b=JSON.parse(opts.body);
+  // 배우기(learn) 호출은 learn* 응답만, 다른 호출은 learn*이 아닌 응답만 쓴다 → 배우기 작업과 다시 분석이 동시에 돌아도 순서가 섞이지 않음
+  if(url.includes('generativelanguage') && opts.body && opts.body.includes('품질 담당') && !st.script.some(x=>x.startsWith('learn'))) return {ok:true,status:200,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify({real:false,why:'mock',rule:'',kind:'other',same:null})}]}}],usageMetadata:{promptTokenCount:100,candidatesTokenCount:10}})};
+  if(url.includes('generativelanguage') && !opts.body.includes('콘텐츠 검토') && st.script.some(x=>(opts.body.includes('품질 담당'))===x.startsWith('learn'))){
+    const ix=st.script.findIndex(x=>(opts.body.includes('품질 담당'))===x.startsWith('learn')); const sc=st.script.splice(ix,1)[0]; const model=(url.match(/models\/([^:]+):/)||[])[1]; const b=JSON.parse(opts.body);
     st.gem.push({model,sc,kind:(b.contents[0].parts[0].text.includes('품질 담당')?'learn':b.contents[0].parts[0].text.includes('채점의 검토자')?'arb':b.contents[0].parts[0].text.includes('레시피 채점자')?'judge':b.contents[0].parts[0].text.includes('꼼꼼히 기록하는 사람')?'scan':b.contents[0].parts[0].text.includes('[영상 장면 기록')?'compose':'single'),cfg:b.generationConfig,vm:b.contents[0].parts[1]?.video_metadata,file:!!b.contents[0].parts[1]?.file_data,nparts:b.contents[0].parts.length,prompt:b.contents[0].parts[0].text});
     if(sc==='slow'){ await new Promise((res,rej)=>{ const t=setTimeout(res,30000); opts.signal&&opts.signal.addEventListener('abort',()=>{ clearTimeout(t); const e=new Error('aborted'); e.name='AbortError'; rej(e); }); }); }
     await new Promise(r=>setTimeout(r,300));
@@ -110,6 +112,8 @@ globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
           st('[[2]]를 붓고 [[7]]을 뿌린다','중불',90,'00:12','00:14.8','00:13.5','가장자리가 보글보글 끓으면'),st('[[3]]를 갈아 넣고 저어 녹인다','약불',60,'00:15','00:16.8','00:16','소스가 숟가락을 코팅하면'),
           st('삶은 [[1]]을 넣고 소스와 버무린다','약불',60,'00:17','00:19.3','00:19')],tools:[],nutrition_per_serving:{kcal:980,carb_g:78,protein_g:45,fat_g:52,sugar_g:4,sodium_mg:900},beginner_notes:['면 삶은 물을 한 컵 남겨 두면 소스 농도 맞추기 좋아요']}]}); }
     if(sc==='ok') return J({is_food:true,evidence:{},recipes:[{...MOCK,sources:['onscreen_text','speech','visual']}]});
+    // v1.15 재료마다 근거·캡션 대조: from 표시, capbad는 간장을 캡션(2숟갈)과 다르게
+    if(sc==='from'||sc==='capbad') return J({is_food:true,evidence:{},recipes:[{...MOCK,sources:['caption','visual'],ingredients:MOCK.ingredients.map((i,k)=>({...i,from:k===0?'visual':k===1?'speech':'caption',estimated:k===0,...(sc==='capbad'&&i.name==='간장'?{orig_qty:1}:{})}))}]});
   }
   if(url==='https://fake.supabase.co/auth/v1/user'){ const t=(opts.headers.Authorization||'').replace('Bearer ',''); const id=t.replace('tok-',''); const p=DB.profiles.find(x=>x.id===id);
     return p?{ok:true,status:200,json:async()=>({id, email:p.email||st.userEmail||'kim@example.com', user_metadata:{full_name:'김영석', avatar_url:''}})}:{ok:false,status:401,json:async()=>({})}; }
