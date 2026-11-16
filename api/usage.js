@@ -36,10 +36,16 @@ export default async function handler(req, res) {
       avgSec: ok ? Math.round(sum('ok', 'sec') / ok) : null, apify: sum('apify', 'n'), tin: sum('tok', 'tokens_in'), tout: sum('tok', 'tokens_out') }; };
   const ops = { today: agg(st7.filter(r => r.day === today)), week: agg(st7) };
   // 비용 (F-J3): 최근 7일 모델별 토큰 × 요금표 ÷ 새로 분석한 건수(성공+실패)
-  let list = 0, now = 0, unpriced = [];
-  for (const r of use7) { if (r.model === 'cache') continue; const c = costUSD(r.model, Number(r.tokens_in), Number(r.tokens_out)); if (!c) { if (Number(r.tokens_in) + Number(r.tokens_out)) unpriced.push(r.model); continue; } list += c.list; now += c.now; }
-  const nAn = ops.week.ok + ops.week.fail;
-  const cost = { per: nAn ? { tin: Math.round(ops.week.tin / nAn), tout: Math.round(ops.week.tout / nAn), listKrw: Math.round(list / nAn * KRW_PER_USD), nowKrw: Math.round(now / nAn * KRW_PER_USD), usd: Math.round(list / nAn * 10000) / 10000 } : null,
+  // 분석 모델(MODELS)만으로 입력·출력 평균 단가를 구해, 분석에 쓴 토큰(채점 토큰 제외)에 곱한다
+  let ti = 0, to = 0, li = 0, lo = 0, ni = 0, no = 0; const unpriced = [];
+  for (const r of use7) { if (!MODELS.includes(r.model)) continue; const a = Number(r.tokens_in), b = Number(r.tokens_out); const ci = costUSD(r.model, a, 0), co = costUSD(r.model, 0, b);
+    if (!ci) { if (a + b) unpriced.push(r.model); continue; } ti += a; to += b; li += ci.list; lo += co.list; ni += ci.now; no += co.now; }
+  const nAn = ops.week.ok + ops.week.fail, rate = (x, t) => (t ? x / t : 0);
+  const per = nAn ? { tin: ops.week.tin / nAn, tout: ops.week.tout / nAn } : null;
+  if (per) { per.list = per.tin * rate(li, ti) + per.tout * rate(lo, to); per.now = per.tin * rate(ni, ti) + per.tout * rate(no, to); }
+  const judgeRow = st7.filter(r => r.kind === 'judge'), nJ = judgeRow.reduce((a, r) => a + r.n, 0);
+  const cost = { per: per ? { tin: Math.round(per.tin), tout: Math.round(per.tout), listKrw: Math.round(per.list * KRW_PER_USD), nowKrw: Math.round(per.now * KRW_PER_USD), usd: Math.round(per.list * 10000) / 10000 } : null,
+    judge: nJ ? { n: nJ, tin: Math.round(judgeRow.reduce((a, r) => a + Number(r.tokens_in), 0) / nJ), tout: Math.round(judgeRow.reduce((a, r) => a + Number(r.tokens_out), 0) / nJ) } : null,
     rate: KRW_PER_USD, priceDate: PRICE_DATE, unpriced: [...new Set(unpriced)] };
   return res.status(200).json({
     day: pacificDay(), resetAt: nextReset().toISOString(), models: MODELS,

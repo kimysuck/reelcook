@@ -8,11 +8,12 @@ import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
-import { recordOutcome } from '../lib/stats.js';
+import { recordOutcome, bumpStats } from '../lib/stats.js';
+import { runJudge } from '../lib/judge.js';
 import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose, canBg, background, sweep } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
-const MAX_OPEN = 25;   // 한 기기에서 동시에 맡길 수 있는 작업 수(평가 모드 20개 + 여유)
+const MAX_OPEN = 50;   // 한 기기에서 동시에 맡길 수 있는 작업 수(평가 모드 20개 + AI 채점 20개 + 여유)
 
 // 끝나면 알림: 보통 분석은 하나씩, 평가 모드는 이 기기의 평가 작업이 모두 끝났을 때 한 번만
 async function notify(job, out) {
@@ -41,19 +42,23 @@ async function step(id) {
   const body = { ...b0, stream: false };
   if (job.state) { delete body.report; Object.assign(body, { resume: job.state, hop: job.hop, fetched: true, noCache: true }); }
   let out; const meter = { tin: 0, tout: 0 };
-  try { out = await run(body, emit, t0, null, { who: job.who, tester: job.tester }, meter); }
+  const judge = job.body && job.body.kind === 'judge';   // AI 채점 작업 (F-J1)
+  try { out = judge ? await runJudge({ ...job.body, state: job.state, hop: job.hop }, emit, t0, +process.env.ANALYZE_DEADLINE_MS || 270_000, meter)
+                    : await run(body, emit, t0, null, { who: job.who, tester: job.tester }, meter); }
   catch (e) { console.error(e); out = { status: 500, json: { error: 'server' } }; }
   await chain;
   if (out.json && out.json.continue) {
     // 시간이 모자람 → 상태를 저장하고 다음 단계를 스스로 부른다
-    await recordOutcome(out, meter, 0, false).catch(() => {});   // 이어서 분석 중간 단계: 토큰만
+    if (judge) await bumpStats('judge', { tin: meter.tin, tout: meter.tout }).catch(() => {});
+    else await recordOutcome(out, meter, 0, false).catch(() => {});   // 이어서 분석 중간 단계: 토큰만
     await patchJob(id, { status: 'queued', state: out.json.resume, hop: out.json.hop, stage: 'continue' });
     await kick(id);
     return 'continue';
   }
   await recordFailure(body, out, t0);
   const sec = Math.round((Date.now() - started) / 1000), wait = Math.max(0, Math.round((started - Date.parse(job.created_at)) / 1000));
-  await recordOutcome(out, meter, sec, true).catch(() => {});
+  if (judge) await bumpStats('judge', { n: 1, sec, tin: meter.tin, tout: meter.tout }).catch(() => {});   // 채점 토큰은 분석 비용과 따로
+  else await recordOutcome(out, meter, sec, true).catch(() => {});
   await patchJob(id, { status: out.status === 200 ? 'done' : 'failed', stage: 'done', state: null, result: { status: out.status, ...out.json, sec, wait } });
   await notify(job, out).catch(() => {});
   await kickNext(job.owner);
@@ -93,6 +98,15 @@ export default async function handler(req, res) {
     const b = req.body || {};
     const link = String(b.link || '').slice(0, 500);
     if (!shortcodeOf(link)) return res.status(400).json({ error: 'link' });
+    if (b.kind === 'judge') {   // AI 채점은 테스터만, 하루 분석 횟수와 상관없음
+      const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
+      if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
+      const recipes = Array.isArray(b.recipes) ? b.recipes.slice(0, 4) : []; if (!recipes.length || JSON.stringify(recipes).length > 80000) return res.status(400).json({ error: 'recipes' });
+      if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
+      const job = await createJob({ owner, who: null, tester: true, prio: 1, link, body: { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
+      if (!job) return res.status(503).json({ error: 'no_jobs' });
+      await kickNext(owner); return res.status(200).json({ id: job.id });
+    }
     if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
     const user = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
     const push = cleanSub(b.push);   // 끝나면 알림 받을 주소(알림을 켠 경우만)

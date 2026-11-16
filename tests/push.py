@@ -49,7 +49,7 @@ with sync_playwright() as p:
     setm('mode=caption&email=tester@example.com&script=ok,ok,ok'); pg.evaluate("sb.auth.signInWithOAuth()"); pg.wait_for_timeout(1500); pg.evaluate("$('#layer').innerHTML=''")
     pg.click('#setBtn'); pg.click('#evalBtn'); pg.wait_for_selector('#evIn')
     pg.fill('#evIn','https://www.instagram.com/reel/PUSHEV1/\nhttps://www.instagram.com/reel/PUSHEV2/\nhttps://www.instagram.com/reel/PUSHEV3/')
-    pg.click('#evGo'); pg.wait_for_function("document.querySelector('.evsum') && document.querySelector('.evsum').innerText.startsWith('3/3')", timeout=60000); pg.wait_for_timeout(1500)
+    pg.uncheck('#evAI'); pg.click('#evGo'); pg.wait_for_function("document.querySelector('.evsum') && document.querySelector('.evsum').innerText.startsWith('3/3')", timeout=60000); pg.wait_for_timeout(1500)
     ev=[x for x in pushes()[2:]]; print('평가 알림:', [x['title'] for x in ev])
     assert len(ev)==1 and ev[0]['title']=='평가 분석이 모두 끝났어요' and ev[0]['url']=='/?eval=1', 'eval should notify once'
 

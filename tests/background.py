@@ -44,7 +44,7 @@ with sync_playwright() as p:
     setm('mode=caption&deadline=270000&email=tester@example.com&script=ok,ok,ok'); pg.evaluate("sb.auth.signInWithOAuth()"); pg.wait_for_timeout(1500); pg.evaluate("$('#layer').innerHTML=''")
     pg.click('#setBtn'); pg.click('#evalBtn'); pg.wait_for_selector('#evIn')
     pg.fill('#evIn','https://www.instagram.com/reel/BGEVAL1/\nhttps://www.instagram.com/reel/BGEVAL2/\nhttps://www.instagram.com/reel/BGEVAL3/')
-    pg.click('#evGo'); pg.wait_for_function("(JSON.parse(localStorage.getItem('rc_eval')).items).every(x=>x.job)", timeout=20000)
+    pg.uncheck('#evAI'); pg.click('#evGo'); pg.wait_for_function("(JSON.parse(localStorage.getItem('rc_eval')).items).every(x=>x.job)", timeout=20000)
     s=st(); ev=[j for j in s['jobs'] if 'BGEVAL' in (j['link'] or '')]; print('맡긴 평가 작업', [(j['status'],j['prio']) for j in ev])
     assert len(ev)==3 and all(j['prio']==1 for j in ev), 'eval jobs not queued on server'
     pg.close(); print('앱 닫음')
