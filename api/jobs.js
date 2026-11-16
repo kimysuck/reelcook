@@ -8,6 +8,7 @@ import { verifyUser } from '../lib/auth.js';
 import { isTester, whoOf } from '../lib/quota.js';
 import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
+import { recordOutcome } from '../lib/stats.js';
 import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose, canBg, background, sweep } from '../lib/jobs.js';
 
 export const config = { maxDuration: 300 };
@@ -39,18 +40,20 @@ async function step(id) {
   const { startedAt: _s, ...b0 } = job.body || {};
   const body = { ...b0, stream: false };
   if (job.state) { delete body.report; Object.assign(body, { resume: job.state, hop: job.hop, fetched: true, noCache: true }); }
-  let out;
-  try { out = await run(body, emit, t0, null, { who: job.who, tester: job.tester }); }
+  let out; const meter = { tin: 0, tout: 0 };
+  try { out = await run(body, emit, t0, null, { who: job.who, tester: job.tester }, meter); }
   catch (e) { console.error(e); out = { status: 500, json: { error: 'server' } }; }
   await chain;
   if (out.json && out.json.continue) {
     // 시간이 모자람 → 상태를 저장하고 다음 단계를 스스로 부른다
+    await recordOutcome(out, meter, 0, false).catch(() => {});   // 이어서 분석 중간 단계: 토큰만
     await patchJob(id, { status: 'queued', state: out.json.resume, hop: out.json.hop, stage: 'continue' });
     await kick(id);
     return 'continue';
   }
   await recordFailure(body, out, t0);
   const sec = Math.round((Date.now() - started) / 1000), wait = Math.max(0, Math.round((started - Date.parse(job.created_at)) / 1000));
+  await recordOutcome(out, meter, sec, true).catch(() => {});
   await patchJob(id, { status: out.status === 200 ? 'done' : 'failed', stage: 'done', state: null, result: { status: out.status, ...out.json, sec, wait } });
   await notify(job, out).catch(() => {});
   await kickNext(job.owner);
