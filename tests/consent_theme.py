@@ -18,6 +18,8 @@ with sync_playwright() as p:
     for k in ['age','terms','privacy']: pg.click(f'[data-agree={k}]')
     assert not pg.is_disabled('#agGo'); pg.click('#agGo')
     pg.wait_for_timeout(200); print('gate hidden', pg.is_hidden('#gate'), pg.evaluate("localStorage.getItem('rc_consent')"))
+    # v1.11: 동의 직후 첫 실행 안내가 한 번 뜬다(F-U3) → 확인하고 닫기
+    pg.wait_for_selector('.gsteps', timeout=5000); print('first-run guide shown after consent'); pg.click('#gdok')
     pg.reload(); pg.wait_for_timeout(3200); print('gate after reload hidden', pg.is_hidden('#gate'))
     # 테마
     pg.evaluate("localStorage.setItem('rc_pass',JSON.stringify('1234'))")

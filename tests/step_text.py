@@ -18,7 +18,7 @@ WANT=['팬에 계란 2개를 깨 넣는다','계란 2개를 넣는다','간장 2
 errs=[]
 with sync_playwright() as p:
     b=p.chromium.launch(**L()); ctx=b.new_context(viewport={'width':390,'height':844})
-    ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"'}));localStorage.setItem('rc_pass',JSON.stringify('1234'));localStorage.setItem('rc_splash_off','1')")
+    ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"'}));localStorage.setItem('rc_pass',JSON.stringify('1234'));localStorage.setItem('rc_splash_off','1');localStorage.setItem('rc_guided','true')")
     pg=ctx.new_page(); pg.on('pageerror',lambda e:errs.append(str(e)))
     pg.goto(B+'/'); pg.wait_for_timeout(1200)
     pg.evaluate("r=>{ S.unit='orig'; openRecipe(normalize(r), null); }", R)
