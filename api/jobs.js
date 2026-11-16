@@ -10,6 +10,7 @@ import { shortcodeOf } from '../lib/instagram.js';
 import { sendPush, cleanSub } from '../lib/push.js';
 import { recordOutcome, bumpStats } from '../lib/stats.js';
 import { runJudge, JUDGES } from '../lib/judge.js';
+import { listLessons, setLesson } from '../lib/lessons.js';
 import { listModels } from '../lib/gemini.js';
 import { jobsReady, ownerOf, jobKey, createJob, getJob, listJobs, patchJob, deleteJobs, countActive, countOpen, claimJob, kick, kickNext, STALE_MS, PAR, cleanupJobs, diagnose, canBg, background, sweep } from '../lib/jobs.js';
 
@@ -18,7 +19,7 @@ const MAX_OPEN = 50;   // 한 기기에서 동시에 맡길 수 있는 작업 �
 
 // 끝나면 알림: 보통 분석은 하나씩, 평가 모드는 이 기기의 평가 작업이 모두 끝났을 때 한 번만
 async function notify(job, out) {
-  const sub = job.body && job.body.push; if (!sub) return;
+  const sub = job.body && job.body.push; if (!sub || (job.body && job.body.kind === 'learn')) return;
   // AI 채점(prio 2)은 분석이 모두 끝난 뒤에 돌고, 채점까지 모두 끝나면 한 번만 알린다
   if (job.prio === 2) {
     if (await countOpen(job.owner, 2) > 0 || await countOpen(job.owner, 1) > 0) return;
@@ -48,7 +49,7 @@ async function step(id) {
   const body = { ...b0, stream: false };
   if (job.state) { delete body.report; Object.assign(body, { resume: job.state, hop: job.hop, fetched: true, noCache: true }); }
   let out; const meter = { tin: 0, tout: 0 };
-  const judge = job.body && job.body.kind === 'judge';   // AI 채점 작업 (F-J1)
+  const judge = job.body && (job.body.kind === 'judge' || job.body.kind === 'learn');   // AI 채점 작업 (F-J1) · 사람 평가에서 배우기 (v1.14)
   try { out = judge ? await runJudge({ ...job.body, state: job.state, hop: job.hop }, emit, t0, +process.env.ANALYZE_DEADLINE_MS || 270_000, meter)
                     : await run(body, emit, t0, null, { who: job.who, tester: job.tester }, meter); }
   catch (e) { console.error(e); out = { status: 500, json: { error: 'server' } }; }
@@ -90,6 +91,14 @@ export default async function handler(req, res) {
     if (have) { const J = JUDGES(); d.judges = Object.fromEntries(['A', 'B', 'ARB'].map(k => [k, J[k][0]])); d.missing = [...new Set(['A', 'B', 'ARB'].map(k => J[k][0]))].filter(m => !have.includes(m)); d.models = have.filter(m => /^gemini-/.test(m)).slice(0, 40); }
     return res.status(200).json(d);
   }
+  // 배운 규칙 보기·켜고 끄기 (테스터만, v1.14)
+  if (q.lessons) {
+    const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
+    if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
+    if (req.method === 'PATCH') { const b = req.body || {}; return res.status(200).json({ ok: await setLesson(b.id, b.active).catch(() => false) }); }
+    const list = await listLessons();
+    return list ? res.status(200).json({ lessons: list }) : res.status(501).json({ error: 'no_table' });
+  }
   if (q.ping) return res.status(req.headers['x-job-key'] === jobKey() ? 200 : 403).json({ ok: req.headers['x-job-key'] === jobKey() });
 
   // 서버끼리: 한 단계 실행 (끝까지 실행한 뒤 응답 — 응답 뒤에는 서버가 멈출 수 있어서)
@@ -108,12 +117,14 @@ export default async function handler(req, res) {
     const b = req.body || {};
     const link = String(b.link || '').slice(0, 500);
     if (!shortcodeOf(link)) return res.status(400).json({ error: 'link' });
-    if (b.kind === 'judge') {   // AI 채점은 테스터만, 하루 분석 횟수와 상관없음
+    if (b.kind === 'judge' || b.kind === 'learn') {   // AI 채점·배우기는 테스터만, 하루 분석 횟수와 상관없음
       const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
       if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
       const recipes = Array.isArray(b.recipes) ? b.recipes.slice(0, 4) : []; if (!recipes.length || JSON.stringify(recipes).length > 80000) return res.status(400).json({ error: 'recipes' });
       if (await countOpen(owner) >= MAX_OPEN) return res.status(429).json({ error: 'too_many_jobs' });
-      const job = await createJob({ owner, who: null, tester: true, prio: 2, link, body: { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
+      const job = await createJob({ owner, who: null, tester: true, prio: 2, link, body: b.kind === 'learn'
+        ? { kind: 'learn', link, recipes, problems: (Array.isArray(b.problems) ? b.problems : []).slice(0, 6).map(p => ({ k: String(p && p.k || 'other').slice(0, 20), reason: String(p && p.reason || '').slice(0, 300) })) }
+        : { kind: 'judge', link, recipes, ...(cleanSub(b.push) ? { push: cleanSub(b.push) } : {}) }, status: 'queued', stage: 'queued' });
       if (!job) return res.status(503).json({ error: 'no_jobs' });
       await kickNext(owner); return res.status(200).json({ id: job.id });
     }

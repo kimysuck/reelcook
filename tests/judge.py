@@ -15,7 +15,7 @@ with sync_playwright() as p:
     pg=ctx.new_page(); pg.on('pageerror',lambda e:errs.append(str(e))); pg.goto(B+'/'); pg.wait_for_timeout(1200)
     setm('mode=caption&email=tester@example.com'); pg.evaluate("sb.auth.signInWithOAuth()"); pg.wait_for_timeout(1500); pg.evaluate("$('#layer').innerHTML=''")
     # 분석(ok) → 채점자 A(모두 통과) → 채점자 B(분량 불통과) → 검토 AI(B가 맞음)
-    setm('mode=caption&email=tester@example.com&resetFiles=1&script=ok,jok,jamt,arbB')
+    setm('mode=caption&email=tester@example.com&resetFiles=1&script=ok,jok,jamt,arbB,learnY')
     pg.click('#setBtn'); pg.click('#evalBtn'); pg.wait_for_selector('#evIn')
     assert pg.is_checked('#evAI'), 'AI judging on by default'
     pg.fill('#evIn','https://www.instagram.com/reel/JUDGE001/'); pg.click('#evGo')
@@ -24,14 +24,24 @@ with sync_playwright() as p:
     assert 'AI 채점 틀림' in ai and '✗ 분량' in ai and '✓ 재료' in ai and '두 AI 일치 3/4 (검토 1)' in ai and '간장 2숟갈' in ai, 'judge line'
     assert '채점 기준: 재료 빠짐 없음 · 분량 ±30%' in pg.inner_text('#app'), 'rubric shown'
     g=[(x.split(':')[0], x.split(':')[2]) for x in st()['gemModels']]; print('호출:', g)
-    assert [k for m,k in g]==['single','judge','judge','arb'] and g[1][0]=='gemini-3.8-flash' and g[2][0]=='gemini-3.6-flash' and g[3][0]=='gemini-3.7-flash', 'judge models'
+    assert [k for m,k in g]==['single','judge','judge','arb','learn'] and g[1][0]=='gemini-3.8-flash' and g[2][0]=='gemini-3.6-flash' and g[3][0]=='gemini-3.7-flash', 'judge models'
     assert st()['files']['up']==2, 'judge should upload the video once'   # 분석 1 + 채점 1
     # 사람도 ✗ → 사람과 AI 일치 1/1
     pg.click('[data-evm="0:ng"]'); pg.click('#evCopy'); pg.wait_for_timeout(300); t=pg.evaluate('navigator.clipboard.readText()')
     print(t[t.index('[AI 채점]'):t.index('[AI 채점]')+260])
-    for k in ['[AI 채점] 1개 · 맞은 비율 0%','기준별 통과: 재료 1/1 · 분량 0/1 · 순서 1/1 · 방법 1/1','채점 AI 둘의 일치: 3/4 기준 · 검토 AI가 결정 1번','사람과 AI 일치: 1/1개 (100%)','채점 모델: gemini-3.8-flash, gemini-3.6-flash, gemini-3.7-flash','AI 채점 틀림: ✓ 재료 · ✗ 분량','[릴스 유형별] 표본 1개 (목표 30개까지 29개)']:
+    for k in ['[AI 채점] 1개 · 맞은 비율 0%','기준별 통과: 재료 1/1 · 분량 0/1 · 순서 1/1 · 방법 1/1','채점 AI 둘의 일치: 3/4 기준 · 검토 AI가 결정 1번','사람과 AI 일치: 1/1개 (100%)','채점 모델: gemini-3.8-flash, gemini-3.6-flash, gemini-3.7-flash','AI 채점 틀림: ✓ 재료 · ✗ 분량','[릴스 유형별] 표본 1개 (목표 30개까지 29개)','배운 규칙: 새로 1개','1번 → 캡션에 숫자 분량이 있으면']:
         assert k in t, 'summary missing: '+k
     # 채점 토큰은 분석 통계와 따로
     s=st()['stats']; kinds={v['kind']:v for v in s.values()}; print('통계 judge:', kinds.get('judge'))
-    assert kinds['judge']['n']==1 and kinds['judge']['tokens_in']==36000 and kinds['tok']['tokens_in']==12000, 'judge tokens separate'
+    assert kinds['judge']['n']==1 and kinds['judge']['tokens_in']==48000 and kinds['tok']['tokens_in']==12000, 'judge tokens separate'
+    # v1.14 배운 규칙: 저장 → 화면 표시 → 다음 분석 지시문에 들어감
+    L=st()['lessons']; print('규칙:', L); assert len(L)==1 and L[0]['active'] and L[0]['source']=='judge' and L[0]['first_code']=='JUDGE001', 'lesson saved'
+    assert '새 규칙을 배웠어요' in pg.inner_text('.evai'), 'learn line'
+    pg.click('#evLsBox summary'); pg.wait_for_selector('[data-lsn]'); assert '캡션에 숫자 분량이 있으면' in pg.inner_text('#evLs')
+    assert st()['gem'][0]['lesson']==False, 'first analysis had no lessons'
+    setm('mode=caption&email=tester@example.com&script=ok')
+    r=pg.evaluate('''async()=>{ const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json','x-app-passcode':'1234'},body:JSON.stringify({link:'https://www.instagram.com/reel/AFTER01/',stream:false})}); return r.status }''')
+    print('다음 분석:', r, st()['gem'][-1]['lesson']); assert r==200 and st()['gem'][-1]['lesson']==True, 'lesson injected into next analysis'
+    # 규칙을 끄면 지시문에서 빠진다
+    pg.uncheck('[data-lsn="1"]'); pg.wait_for_timeout(800); assert st()['lessons'][0]['active']==False, 'lesson toggled off'
 print('errors', errs)
