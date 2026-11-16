@@ -13,7 +13,7 @@ errs=[]
 with sync_playwright() as p:
     b=p.chromium.launch(**L()); ctx=b.new_context(viewport={'width':390,'height':844}, device_scale_factor=1)
     ctx.grant_permissions(['clipboard-read','clipboard-write'], origin=B)
-    ctx.add_init_script("localStorage.setItem('rc_splash_off','1');if(!sessionStorage.getItem('x')){sessionStorage.setItem('x',1);localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))}")
+    ctx.add_init_script("localStorage.setItem('rc_splash_off','1');localStorage.setItem('rc_guided','true');if(!sessionStorage.getItem('x')){sessionStorage.setItem('x',1);localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))}")
     ctx.route('**/supabase-js@2/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=FAKE))
     pg=ctx.new_page(); pg.on('pageerror',lambda e:errs.append(str(e)))
     pg.goto(B+'/'); pg.wait_for_timeout(2500)

@@ -60,14 +60,18 @@ async function step(id) {
 export default async function handler(req, res) {
   const q0 = req.query || {};
   // 안전망: 누구나 불러도 되는 일(멈춘 작업만 다시 시작)이라 비밀번호 없이. Supabase 예약 작업(pg_cron)이 1분마다 부른다.
-  if (q0.sweep) { if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' }); const n = await sweep(); return res.status(200).json({ owners: n }); }
+  if (q0.sweep) { if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' }); const n = await sweep(); return res.status(200).json(n < 0 ? { skipped: true } : { owners: n }); }
   const pass = process.env.APP_PASSCODE;
   if (pass && req.headers['x-app-passcode'] !== pass) return res.status(401).json({ error: 'passcode' });
   if (!jobsReady()) return res.status(501).json({ error: 'no_jobs' });   // 앱은 예전 방식(직접 분석)으로 한다
   const q = req.query || {};
 
   // 점검(설정 > AI 사용량): 작업 표·자기 호출이 되는지
-  if (q.diag) return res.status(200).json(await diagnose());
+  if (q.diag) {   // 테스터 로그인일 때만 (F-A2)
+    const u = req.headers.authorization ? await verifyUser(req).catch(() => null) : null;
+    if (!isTester(u)) return res.status(403).json({ error: 'tester_only' });
+    return res.status(200).json(await diagnose());
+  }
   if (q.ping) return res.status(req.headers['x-job-key'] === jobKey() ? 200 : 403).json({ ok: req.headers['x-job-key'] === jobKey() });
 
   // 서버끼리: 한 단계 실행 (끝까지 실행한 뒤 응답 — 응답 뒤에는 서버가 멈출 수 있어서)

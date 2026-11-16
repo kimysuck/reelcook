@@ -477,6 +477,14 @@ input[type=number]{border:1.5px solid var(--line);border-radius:10px;padding:13p
 .evhow{margin-top:8px;padding-left:1.2em;font-size:.86rem}#evAgain{display:inline-flex;gap:6px;align-items:center}.evb{gap:6px;margin-top:10px}.evb .mk{flex:1;min-height:42px;border:1.5px solid var(--line);border-radius:10px;font-weight:700}
 .evb .mk.on{background:var(--herb);border-color:var(--herb);color:#fff}.evb .mk.ng.on{background:var(--hot);border-color:var(--hot)}.evi input{margin-top:8px}
 
+/* v1.11: 확인 필요 재료 · 첫 실행 안내 */
+.estsum{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:.84rem;color:var(--yolk-d);background:var(--yolk-t);border-radius:8px;padding:6px 10px;font-weight:700}
+.estsum .ic{width:16px;height:16px}
+.ing.flash{background:var(--yolk-t);transition:background .3s}
+.small{font-size:.8rem}
+.gsteps{list-style:none;counter-reset:g;margin-top:14px}.gsteps li{counter-increment:g;position:relative;padding:12px 0 12px 40px;border-bottom:1px solid var(--line2)}
+.gsteps li::before{content:counter(g);position:absolute;left:0;top:12px;width:26px;height:26px;border-radius:50%;background:var(--pri);color:#fff;font-weight:700;font-size:.85rem;display:flex;align-items:center;justify-content:center}
+.gsteps b{display:block}.gsteps span{display:block;color:var(--ink2);font-size:.9rem;margin-top:2px}
 /* 줄바꿈 다듬기 (v1.10): 한 줄을 꽉 채우고 다음 줄에 조금만 남는 모양을 피한다 */
 body{text-wrap:pretty}
 p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.install,.login-card,.ailabel span,.serv .lbl small,.cue span,.tip span,.mis span,.muted,label.fl,.tile .t,.post .tt{text-wrap:balance}
@@ -508,7 +516,7 @@ p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.instal
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.10';
+const VERSION='v1.11';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -931,7 +939,8 @@ async function disablePush(){
 }
 function pushCTA(){ const st=pushState();
   if (st==='on') return `<div class="note bg" style="margin-top:10px">${IC.bell}끝나면 알림으로 알려 드릴게요.</div>`;
-  if (st==='off') return `<button class="btn sec" data-push-on style="margin-top:12px;width:100%">${IC.bell}끝나면 알림 받기</button>`;
+  // 알림 권유는 처음 한 번만 (그 뒤로는 설정에서 켤 수 있다, F-U4)
+  if (st==='off' && (!LS.get('rc_push_asked',false) || S.pushAskNow)){ if (!S.pushAskNow){ S.pushAskNow=true; LS.set('rc_push_asked',true); } return `<button class="btn sec" data-push-on style="margin-top:12px;width:100%">${IC.bell}끝나면 알림 받기</button>`; }
   return ''; }
 document.addEventListener('click', e=>{ if (e.target.closest && e.target.closest('[data-push-on]')) enablePush(); });
 async function analyze(opts={}){
@@ -948,7 +957,7 @@ async function analyze(opts={}){
     if (S.images.length){ body.images=[]; for (const x of S.images) body.images.push({mime:'image/jpeg', data: await blobToB64(x.blob)}); }
     const useJob=canJob() && igLink && !S.images.length;
     const onEv=ev=>{
-      if (ev.stage==='job'){ S.jobId=ev.id; LS.set('rc_job',{id:ev.id, link:S.link.trim(), replaceId:S.replaceId||null, at:S.t0}); render(); }
+      if (ev.stage==='job'){ S.pushAskNow=false; S.jobId=ev.id; LS.set('rc_job',{id:ev.id, link:S.link.trim(), replaceId:S.replaceId||null, at:S.t0}); render(); }
       else if (ev.stage==='queued'){ S.phase='queued'; render(); }
       else if (ev.stage==='fallback'){ S.jobId=null; LS.set('rc_job',null); S.phase='fetch'; S.note2='서버 분석을 쓸 수 없어서 바로 분석하고 있어요. 끝날 때까지 앱을 켜 두세요.'; render(); }
       else if (ev.stage==='cached'){ S.phase='cached'; render(); }
@@ -1037,7 +1046,9 @@ function viewProgress(){
     : S.phase==='compose' ? `장면 ${S.scenes||''}개를 보고 레시피로 정리하는 중`
     : f && f.visualOnly ? '영상 속 자막과 음성까지 꼼꼼히 읽는 중'
     : f && f.gotVideo ? '영상과 캡션을 같이 읽는 중' : '레시피로 정리하는 중';
-  const hint = S.phase==='fetch' ? '보통 10~30초 걸려요'
+  const avg = S.avgSec ? `보통 약 ${S.avgSec<90?Math.max(1,Math.round(S.avgSec/10)*10)+'초':Math.round(S.avgSec/60)+'분'}` : '보통 1~2분';
+  const hint = S.jobId ? avg+' 걸려요'
+    : S.phase==='fetch' ? '보통 10~30초 걸려요'
     : S.phase==='scan' ? '화면과 소리만으로 만들어서 1~2분 걸릴 수 있어요'
     : S.phase==='compose' ? '거의 다 됐어요'
     : f && f.longVideo ? '긴 영상이라 1~2분 걸릴 수 있어요'
@@ -1051,6 +1062,7 @@ function viewProgress(){
   return `<div class="prog">${gauge(0)}
     <div class="prog-title">${title}</div>
     <div class="prog-time"><span id="elapsed">${sec}초</span> 지남, ${hint}</div>
+    ${S.jobId?'<div class="muted small">영상만 있는 릴스는 조금 더 걸려요</div>':''}
     ${S.note2?`<div class="note" style="margin-top:14px">${esc(S.note2)}</div>`:''}
     ${S.jobId?`<div class="note bg" style="margin-top:14px">${IC.check}앱을 닫아도 분석은 서버에서 계속돼요. 다시 열면 결과가 바로 나와요.</div>${pushCTA()}`:''}
     ${checks}
@@ -1164,8 +1176,8 @@ function viewRecipe(){
     + (ratio?`<div class="ratio"><div class="rv">${ratio.map((x,i)=>`${i?'<span class="co">:</span>':''}<div class="it"><b>${esc(x.v)}</b><span>${esc(x.name)}</span></div>`).join('')}</div>
         <p>양념은 숟가락 비율이에요. 숟가락 크기는 달라도 같은 숟가락 하나로만 재면 간이 맞아요.</p></div>`:'')
     + Object.entries(groups).map(([g,list])=>`<div class="grp">${esc(g)}</div>${
-      list.map(i=>{ const a=amountOf(i,k()); const sub=[i.prep?`<span class="prep">${esc(i.prep)}</span>`:'', a.alt?`<span>${esc(a.alt)}</span>`:'', i.estimated?'<span class="est">화면 보고 추정</span>':''].filter(Boolean).join('');
-        return `<div class="ing"><div class="ln"><span class="n">${esc(i.name)}</span><span class="dots"></span><span class="big">${esc(a.big)}</span></div>${sub?`<div class="sub">${sub}</div>`:''}</div>`; }).join('')}`).join('')
+      list.map(i=>{ const a=amountOf(i,k()), est=i.estimated&&!isWordAmt(i); const sub=[i.prep?`<span class="prep">${esc(i.prep)}</span>`:'', a.alt?`<span>${esc(a.alt)}</span>`:'', est?'<span class="est">화면 보고 추정</span>':''].filter(Boolean).join('');
+        return `<div class="ing${est?' isest':''}"><div class="ln"><span class="n">${esc(i.name)}</span><span class="dots"></span><span class="big">${esc(a.big)}</span></div>${sub?`<div class="sub">${sub}</div>`:''}</div>`; }).join('')}`).join('')
     + (r.beginner_notes.length?`<div class="notes"><h4>시작하기 전에</h4><ul>${r.beginner_notes.map(n=>`<li>${esc(n)}</li>`).join('')}</ul></div>`:'');
   }
   if (S.rtab==='step'){
@@ -1206,6 +1218,7 @@ function viewRecipe(){
     ${pick}
     <h1>${esc(r.title)}</h1>
     ${r.summary?`<p class="sum">${esc(r.summary)}</p>`:''}
+    ${(()=>{ const n=r.ingredients.filter(i=>i.estimated&&!isWordAmt(i)).length; return n?`<button class="estsum" id="estJump">${IC.alert}확인이 필요한 재료 ${n}개 · 화면 보고 추정</button>`:''; })()}
     <div class="ailabel"><b>${r.edited?'AI 정리 + 직접 고침':'AI 정리'}</b><span>AI가 릴스를 보고 만든 레시피${r.edited?'를 내가 직접 고쳤어요':'예요'}. 분량, 시간, 영양은 틀릴 수 있어요.${srcText(r)?`<br>근거: ${srcText(r)}`:''}</span></div>
     ${src.link?`<button class="btn link bad" id="badResult">${IC.flag}결과가 이상해요</button>`:''}
     <div class="meta"><span>${IC.clock}${esc(r.total_min||'?')}분</span>${r.difficulty?`<span>${esc(r.difficulty)}</span>`:''}${conf}${src.cached?'<span>저장된 분석</span>':''}</div>
@@ -1266,6 +1279,9 @@ function bindRecipe(){
   $('#save').onclick=saveRecipe;
   $('#cookBtn').onclick=()=>openCook(0);
   const br=$('#badResult'); if(br) br.onclick=openBadResult;
+  const ej=$('#estJump'); if(ej) ej.onclick=()=>{ S.rtab='ing'; render();   // 재료 탭의 추정 재료로 이동하고 잠깐 강조 (F-U1)
+    const els=[...document.querySelectorAll('.ing.isest')]; if (!els.length) return;
+    els[0].scrollIntoView({behavior:'smooth', block:'center'}); els.forEach(e=>{ e.classList.add('flash'); setTimeout(()=>e.classList.remove('flash'),2200); }); };
   const eb=$('#editBtn'); if(eb) eb.onclick=openEditor;
   $('#shareBtn').onclick=()=>openShareSheet(S.recipe);
 }
@@ -2037,7 +2053,9 @@ $('#setBtn').onclick=()=>{
     <label class="fl">앱 비밀번호</label>
     <input type="text" id="pw" value="${esc(S.pass)}" placeholder="Vercel의 APP_PASSCODE">
     <div class="row" style="margin-top:18px"><button class="btn ghost" style="flex:1" id="pwc">닫기</button><button class="btn pri" style="flex:1" id="pws">저장</button></div>
-    <label class="fl">AI 사용량</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>
+    <label class="fl">오늘 분석</label><div id="quotaLine" class="muted">확인하는 중…</div>
+    ${S.tester?`<label class="fl">AI 사용량 (테스터 전용)</label><button class="btn ghost sm" id="usageBtn">오늘 사용량 보기</button>`:''}
+    <label class="fl">도움말</label><button class="btn ghost sm" id="guideBtn">사용 방법 다시 보기</button>
     ${S.tester?`<label class="fl">평가 모드 (테스터 전용)</label><button class="btn ghost sm" id="evalBtn">분석 품질 평가하기</button>`:''}
     <div class="legal"><button data-doc="terms">이용약관</button><button data-doc="privacy">개인정보 처리방침</button><button class="danger" id="wd">동의 철회 및 데이터 삭제</button></div>
     <p class="muted" style="font-size:.8rem;margin-top:12px">릴쿡 ${VERSION}, 약관 ${TERMS_VERSION}</p></div></div>`;
@@ -2045,7 +2063,11 @@ $('#setBtn').onclick=()=>{
   document.querySelectorAll('[data-th]').forEach(b=>b.onclick=()=>{ S.theme=b.dataset.th; LS.set('rc_theme',S.theme); applyTheme(); document.querySelectorAll('[data-th]').forEach(x=>x.classList.toggle('on',x===b)); });
   document.querySelectorAll('.legal [data-doc]').forEach(b=>b.onclick=()=>showDoc(b.dataset.doc));
   $('#wd').onclick=withdraw;
-  $('#usageBtn').onclick=showUsage;
+  const ub0=$('#usageBtn'); if (ub0) ub0.onclick=showUsage;
+  $('#guideBtn').onclick=()=>showGuide();
+  (async()=>{ const el=$('#quotaLine'); try{ const r=await fetch('/api/usage',{headers:await jobHeaders()}); const d=await r.json(); if (!el||!el.isConnected) return;
+    el.textContent = d.tester ? '테스터 계정이라 횟수 제한이 없어요' : r.ok ? `오늘 남은 분석 ${d.left}회 / ${d.dailyLimit}회 · 이미 분석된 릴스는 횟수를 쓰지 않아요` : '확인하지 못했어요';
+  }catch(e){ if (el) el.textContent='확인하지 못했어요'; } })();
   const evb=$('#evalBtn'); if (evb) evb.onclick=()=>{ $('#layer').innerHTML=''; stopAllTimers(); S.recipe=null; S.tab='eval'; window.scrollTo(0,0); render(); };
   document.querySelectorAll('[data-pu]').forEach(b=>b.onclick=async()=>{ if (b.dataset.pu==='on') await enablePush(); else { await disablePush(); toast('분석 완료 알림을 껐어요'); }
     document.querySelectorAll('[data-pu]').forEach(x=>x.classList.toggle('on',x.dataset.pu===pushState())); });
@@ -2142,8 +2164,9 @@ async function showUsage(){
   document.body.appendChild(box); box.querySelector('.x').onclick=()=>box.remove();
   const ub=box.querySelector('#ub');
   try{
-    const r=await fetch('/api/usage',{headers:S.pass?{'x-app-passcode':S.pass}:{}}); const d=await r.json();
+    const r=await fetch('/api/usage',{headers:await jobHeaders()}); const d=await r.json();
     if (!r.ok) throw new Error(d.error==='passcode'?'앱 비밀번호가 맞지 않아요.':'불러오지 못했어요.');
+    if (!d.tester) throw new Error('테스터 계정에서만 볼 수 있어요.');
     const byM=Object.fromEntries((d.rows||[]).map(x=>[x.model,x])), short=m=>m.replace(/^gemini-/,'');
     const cache=byM.cache;
     const rows=d.models.map(m=>{ const x=byM[m]||{calls:0,ok:0,busy:0,limited:0,tin:0,tout:0};
@@ -2300,6 +2323,21 @@ document.addEventListener('visibilitychange', ()=>{ if (document.visibilityState
 window.addEventListener('pagehide', saveResume);
 // 앱을 닫은 동안 서버가 분석하던 작업이 있으면 그 결과부터 받아 온다
 function resumeEvalJobs(){ if (S.ev && S.ev.items.some(x=>x.status==='run'&&x.job) && canJob()) runEval(); }
+const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+function showGuide(){
+  const ios=isIOS();
+  const steps=[['홈 화면에 추가', ios?'사파리 아래 공유 버튼 → "홈 화면에 추가"를 누르면 앱처럼 쓸 수 있어요.':'크롬 메뉴(⋮) → "홈 화면에 추가"를 누르면 앱처럼 쓸 수 있어요.'],
+    ios?['링크 복사 → 붙여넣기', '아이폰은 공유 메뉴에 릴쿡이 안 떠요. 인스타 릴스에서 "링크 복사" 후 릴쿡의 "복사한 링크로 시작"을 누르세요.']
+       :['인스타에서 공유 → 릴쿡', '요리 릴스의 공유 버튼에서 릴쿡을 고르면 바로 분석을 시작해요.'],
+    ['끝나면 알림', '분석은 1~2분 걸려요. 앱을 닫아도 끝나면 알림으로 알려 드려요.']];
+  $('#layer').innerHTML=`<div class="modal"><div class="sheet guide"><div class="row" style="justify-content:space-between"><h3>이렇게 써요</h3><button class="x" id="gdx" aria-label="닫기">${IC.x}</button></div>
+    <ol class="gsteps">${steps.map(([t,d])=>`<li><b>${t}</b><span>${d}</span></li>`).join('')}</ol>
+    <button class="btn pri" id="gdok" style="width:100%;margin-top:18px">시작하기</button></div></div>`;
+  const done=()=>{ LS.set('rc_guided',true); $('#layer').innerHTML=''; };
+  $('#gdx').onclick=done; $('#gdok').onclick=done;
+}
+// 처음 한 번만. 인스타 "공유"로 처음 열렸으면 분석부터 보여 주고 다음에 켤 때 안내한다
+function maybeGuide(){ if (!LS.get('rc_guided',false) && !/[?&](share|job|eval)=/.test(location.search) && !$('#layer').innerHTML.trim()) showGuide(); }
 function resumeJob(){
   const j=LS.get('rc_job',null); if (!j || !j.id || Date.now()-j.at>3*86400e3){ LS.set('rc_job',null); return false; }
   S.tab='import'; S.recipe=null; resetInput(); S.link=j.link; analyze({jobId:j.id, replaceId:j.replaceId, t0:j.at}); return true;
@@ -2326,6 +2364,7 @@ if (!consented()) showGate();
 pushGuard();
 if (new URLSearchParams(location.search).has('share')) whenConsented(readShareInbox);
 else whenConsented(()=>{ if (!resumeJob()) resumeLast(); });
+whenConsented(()=>setTimeout(maybeGuide, 400));
 whenConsented(()=>setTimeout(resumeEvalJobs, 300));
 initCloud();
 </script>

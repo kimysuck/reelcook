@@ -9,7 +9,7 @@ def share(pg, code):
  const t=document.createElement('input');t.name='text';t.value='https://www.instagram.com/reel/'+c+'/';f.appendChild(t);document.body.appendChild(f);f.submit();}""", code)
 with sync_playwright() as p:
     b=p.chromium.launch(**L(), ); ctx=b.new_context(viewport={'width':390,'height':844}, device_scale_factor=2)
-    ctx.add_init_script("localStorage.setItem('rc_splash_off','1');localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))")
+    ctx.add_init_script("localStorage.setItem('rc_splash_off','1');localStorage.setItem('rc_guided','true');localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}));localStorage.setItem('rc_pass',JSON.stringify('1234'))")
     ctx.route('**/supabase-js@2/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=FAKE))
     pg=ctx.new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
     pg.goto(B+'/'); pg.wait_for_timeout(3000)
@@ -30,6 +30,8 @@ with sync_playwright() as p:
     # 3) 하루 한도 전부 소진
     setm('mode=caption&script='+','.join(['429d']*6)); share(pg,'QUOTADAY1'); pg.wait_for_selector('.err', timeout=30000); print('quota:', pg.inner_text('.err'))
     # 4) 사용량 화면
+    # 사용량 화면은 테스터 전용(v1.11) → 테스터로 로그인
+    setm('mode=caption&email=tester@example.com'); pg.evaluate("sb.auth.signInWithOAuth()"); pg.wait_for_timeout(1500); pg.evaluate("$('#layer').innerHTML=''")
     pg.click('#setBtn'); pg.click('#usageBtn'); pg.wait_for_selector('.usage', timeout=8000); pg.wait_for_timeout(300); pg.screenshot(path='u_usage.png')
     print('usage rows', pg.locator('.usage tr').count(), pg.inner_text('#ub')[:120].replace('\n',' '))
     print('errors', errs)

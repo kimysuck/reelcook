@@ -6,7 +6,7 @@ FAKE=open('fake-supabase2.js').read()
 def setm(q): urllib.request.urlopen(B+'/__set?'+q).read()
 with sync_playwright() as p:
     b=p.chromium.launch(**L(), ); ctx=b.new_context(viewport={'width':390,'height':844}, device_scale_factor=2)
-    ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'x'}));localStorage.setItem('rc_pass',JSON.stringify('1234'));localStorage.setItem('rc_splash_off','1')")
+    ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'x'}));localStorage.setItem('rc_pass',JSON.stringify('1234'));localStorage.setItem('rc_splash_off','1');localStorage.setItem('rc_guided','true')")
     ctx.route('**/supabase-js@2/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=FAKE))
     pg=ctx.new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
     pg.goto(B+'/'); pg.wait_for_timeout(400)

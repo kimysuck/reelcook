@@ -10,7 +10,7 @@ share="""()=>{const f=document.createElement('form');f.method='POST';f.action='/
  const t=document.createElement('input');t.name='text';t.value='https://www.instagram.com/reel/DcWRR4CsHvb/';f.appendChild(t);document.body.appendChild(f);f.submit();}"""
 with sync_playwright() as p:
     b=p.chromium.launch(**L(), ); ctx=b.new_context(viewport={'width':390,'height':844})
-    ctx.add_init_script("localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}))")
+    ctx.add_init_script("localStorage.setItem('rc_guided','true');localStorage.setItem('rc_consent',JSON.stringify({version:'"+TV+"',at:'2026-11-12T00:00:00Z'}))")
     ctx.route('**/supabase-js@2/**', lambda r: r.fulfill(status=200, content_type='application/javascript', body=FAKE))
     ctx.route('https://fake.supabase.co/storage/v1/object/public/photos/**', lambda r: r.fulfill(status=200, content_type='image/jpeg', body=urllib.request.urlopen(B+'/__photo/'+r.request.url.split('/photos/')[1]).read()))
     pg=ctx.new_page(); errs=[]; pg.on('pageerror',lambda e:errs.append(str(e)))
