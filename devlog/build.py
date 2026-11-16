@@ -540,9 +540,9 @@ d6 = []
 d6.append(('cover', f'''
 <div class="kick">2026.11.16 (월) · 11/15 저녁 – 11/17 새벽</div>
 <h1>세 사람의 눈으로<br>다시 본 릴쿡</h1>
-<p class="lead">사용자·운영자·공모전 심사위원 세 입장에서 앱을 검토해 <b>우선순위 지침</b>을 만들고, 그 순서대로 고쳤습니다. 개발자 혼자 하던 채점을 <b>AI 채점</b>으로 바꾸고, 틀린 결과에서 <b>일반 규칙을 배워 다음 분석에 적용</b>하는 구조와, 사용자가 레시피를 믿을 수 있게 하는 <b>근거 표시</b>까지 이어졌습니다.</p>
+<p class="lead">사용자·운영자·공모전 심사위원 세 입장에서 앱을 검토해 <b>우선순위 지침</b>을 만들고, 그 순서대로 고쳤습니다. 개발자 혼자 하던 채점을 <b>AI 채점</b>으로 바꾸고, 틀린 결과에서 <b>일반 규칙을 배워 다음 분석에 적용</b>하는 구조와, 사용자가 레시피를 믿을 수 있게 하는 <b>근거 표시</b>까지 이어졌습니다. 채팅에서는 <b>수익 모델과 출시 준비</b>(비공개 테스트·설문)를 검토했습니다.</p>
 <div class="stat"><div><b>11건</b>GitHub 커밋</div><div><b>v1.9.2 → v1.15</b>버전</div><div><b>15 → 22개</b>자동 테스트</div></div>
-<div class="chips"><span>피드백 지침</span><span>첫 실행 안내</span><span>원작자 표시</span><span>사용성 설문(SUS)</span><span>운영 지표·비용</span><span>AI 채점</span><span>배운 규칙</span><span>근거 표시</span></div>
+<div class="chips"><span>피드백 지침</span><span>첫 실행 안내</span><span>원작자 표시</span><span>사용성 설문(SUS)</span><span>운영 지표·비용</span><span>AI 채점</span><span>배운 규칙</span><span>근거 표시</span><span>수익화·출시 검토</span></div>
 '''))
 d6.append(('', f'''
 <div class="tag">방향 설정 · 피드백 지침</div>
@@ -657,11 +657,18 @@ d6.append(('', f'''
 <tr><td>16:21</td><td>v1.13</td><td>AI 교차 채점(채점 AI 2 + 검토 AI)</td></tr>
 <tr><td>17:12</td><td>v1.13.1</td><td>4회차 반영: 채점 모델·순서, 수집 재시도</td></tr>
 <tr><td>18:08</td><td>v1.13.2</td><td>한도 초기화 직후 사용량 표시</td></tr>
+<tr><td>11/16 (채팅)</td><td>—</td><td>수익화·출시 검토: 수익 모델, 비공개 테스트, 설문</td></tr>
 <tr><td>11/17 00:47</td><td>v1.14</td><td>배운 규칙, 5회차 반영</td></tr>
 <tr><td>11/17 01:21</td><td>v1.15</td><td>재료별 근거, 캡션 대조, 신고로 학습</td></tr>
 </table>
 <p class="note">다음 과제 · 평가 표본 30개 이상 확보 후 정확도 공개 검토, 3단계(갤러리 영상 음성 분석, index.html 파일 분리, 타이머 알림)</p>
 '''))
+# 비공개 카드(수익화·출시 검토 등): devlog/private/d6_extra.py 가 있으면 정리 카드 앞에 넣는다
+_x = PRIV / 'd6_extra.py'
+if _x.exists():
+    _ns = {'rows': rows, 'bullets': bullets, 'code': code, 'phones': phones, 'T': T}
+    exec(_x.read_text(), _ns)
+    d6[-1:-1] = [('', b) for b in _ns['CARDS']]
 DAYS.append((6, d6))
 
 # ───────────── PIN ─────────────
