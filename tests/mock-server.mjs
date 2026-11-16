@@ -70,7 +70,7 @@ globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
   if(url.includes('/rest/v1/ai_usage')) return {ok:true,status:200,json:async()=>Object.values(st.usage)};
   if(url.includes('generativelanguage') && !opts.body.includes('콘텐츠 검토') && st.script.length){
     const sc=st.script.shift(); const model=(url.match(/models\/([^:]+):/)||[])[1]; const b=JSON.parse(opts.body);
-    st.gem.push({model,sc,kind:(b.contents[0].parts[0].text.includes('꼼꼼히 기록하는 사람')?'scan':b.contents[0].parts[0].text.includes('[영상 장면 기록')?'compose':'single'),cfg:b.generationConfig,vm:b.contents[0].parts[1]?.video_metadata,file:!!b.contents[0].parts[1]?.file_data,nparts:b.contents[0].parts.length,prompt:b.contents[0].parts[0].text});
+    st.gem.push({model,sc,kind:(b.contents[0].parts[0].text.includes('채점의 검토자')?'arb':b.contents[0].parts[0].text.includes('레시피 채점자')?'judge':b.contents[0].parts[0].text.includes('꼼꼼히 기록하는 사람')?'scan':b.contents[0].parts[0].text.includes('[영상 장면 기록')?'compose':'single'),cfg:b.generationConfig,vm:b.contents[0].parts[1]?.video_metadata,file:!!b.contents[0].parts[1]?.file_data,nparts:b.contents[0].parts.length,prompt:b.contents[0].parts[0].text});
     if(sc==='slow'){ await new Promise((res,rej)=>{ const t=setTimeout(res,30000); opts.signal&&opts.signal.addEventListener('abort',()=>{ clearTimeout(t); const e=new Error('aborted'); e.name='AbortError'; rej(e); }); }); }
     await new Promise(r=>setTimeout(r,300));
     const E=(status,error)=>({ok:false,status,json:async()=>({error})});
@@ -80,6 +80,11 @@ globalThis.fetch=async (url,opts)=>{ url=String(url); opts=opts||{};
     const J=o=>({ok:true,status:200,json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(o)}]}}],usageMetadata:{promptTokenCount:12000,candidatesTokenCount:900}})});
     const r2={...MOCK,title:'숙주 겉절이',sources:['onscreen_text','speech'],ingredients:MOCK.ingredients.slice(1,4),steps:[{text:'[[0]]를 데친다',heat:'강불',seconds:60,cue:'',tip:'',mistake:'',clip:{start:'00:06',end:'00:09'},photo:'00:08'}]};
     if(sc==='multi') return J({is_food:true,evidence:{speech:'간장 두 숟갈',onscreen_text:'숙주 1봉',caption:'레시피',comments_used:['작성자 1']},recipes:[{...MOCK,sources:['caption','owner_comment','onscreen_text']},r2]});
+    // AI 채점(F-J1): 채점자 A·B와 검토 AI
+    const CR=(amt)=>({criteria:{ingredients:{pass:true,reason:'',evidence:'00:03'},amounts:{pass:amt,reason:amt?'':'간장 2숟갈인데 1숟갈로 나옴',evidence:'캡션'},steps:{pass:true,reason:''},method:{pass:true,reason:''}}});
+    if(sc==='jok') return J(CR(true));
+    if(sc==='jamt') return J(CR(false));
+    if(sc==='arbB') return J({decisions:{amounts:{pass:false,right:'B',why:'캡션에 간장 2숟갈'}}});
     if(sc==='notfood') return J({is_food:false,reason:'맛집 소개 영상이에요',recipes:[]});
     if(sc==='empty') return J({is_food:true,recipes:[]});
     if(sc==='cover') return J({is_food:true,evidence:{},recipes:[{...MOCK,cover_time:'00:12',sources:['caption','speech'],steps:MOCK.steps.map((x,i)=>({...x,clip:{start:i?'00:08':'00:02',end:i?'00:14':'00:06'},photo:i?'00:11':'00:04'}))}]});
