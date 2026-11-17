@@ -671,6 +671,14 @@ if _x.exists():
     d6[-1:-1] = [('', b) for b in _ns['CARDS']]
 DAYS.append((6, d6))
 
+# Day 7부터: 카드 전체가 개인 자료인 날은 devlog/private/dN_cards.py 에 둔다(공개 저장소 제외)
+for _n in range(7, 60):
+    _p = PRIV / f'd{_n}_cards.py'
+    if _p.exists():
+        _ns = {'rows': rows, 'bullets': bullets, 'code': code, 'phones': phones, 'T': T}
+        exec(_p.read_text(), _ns)
+        DAYS.append((_n, _ns['CARDS']))
+
 # ───────────── PIN ─────────────
 dp = []
 dp.append(('pincover', f'''
