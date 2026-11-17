@@ -3,6 +3,11 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 T = I = (BASE / 'img').as_uri() + '/'
 PRIV = BASE / 'private'
+
+def R(name, fallback):
+    # 실제 앱 화면(개인 자료 폴더)이 있으면 그것을, 없으면 공개 테스트 화면을 쓴다
+    p = PRIV / 'img' / name
+    return p.as_uri() if p.exists() else T + fallback
 esc = html.escape
 
 CSS = (BASE / 'style.css').read_text()
@@ -72,7 +77,7 @@ d1.append(('', f'''
 <div class="tag">서비스 개요</div>
 <h2>공유 한 번으로<br>레시피가 완성되는 구조</h2>
 <p class="lead">사용자는 인스타그램에서 <b>공유 → 릴쿡</b>만 누릅니다. 앱이 릴스의 캡션·댓글·영상을 수집하고, Google Gemini가 이를 분석해 <b>g·ml 단위 재료, 단계별 조리법, 해당 장면</b>을 담은 레시피로 정리합니다.</p>
-{phones([(T+'d_home.jpg','① 링크 공유'),(T+'u_scan.jpg','② AI 분석'),(T+'d_ing.jpg','③ 레시피')])}
+{phones([(R('s_home.jpg','d_home.jpg'),'① 링크 공유'),(R('s_prog.jpg','u_scan.jpg'),'② AI 분석'),(R('s_hero.jpg','d_ing.jpg'),'③ 레시피')])}
 '''))
 d1.append(('', f'''
 <div class="tag">시스템 구성</div>
@@ -128,7 +133,7 @@ d1.append(('', f'''
           'Vercel 응답 크기 제한(4.5MB)을 피하려고 인스타 영상을 <b>3MB 단위 Range 요청</b>으로 나눠 중계(api/video.js)',
           '저장한 레시피의 영상·장면은 휴대폰(IndexedDB)에 보관 → 인스타 링크가 만료돼도 재생 가능',
           '영상 속 단위(숟갈·컵)를 기본으로 보여 주고 g·ml 정밀 모드 전환, 양념 비율 카드, 분석·조리 중 화면 꺼짐 방지'])}
-{phones([(T+'d_step.jpg','단계별 장면'),(T+'d_cook.jpg','요리 모드')],'two')}
+{phones([(R('s_step.jpg','d_step.jpg'),'단계별 장면'),(R('s_ing.jpg','d_cook.jpg'),'영상 속 단위·비율','','margin-top:-560px')],'two')}
 '''))
 d1.append(('', f'''
 <div class="tag">기능 추가 · v0.8 – v0.9.1</div>
@@ -210,8 +215,7 @@ d2.append(('', f'''
           '가로로 돌리면 영상과 단계 설명을 나란히 배치',
           '분석이 진행되는 동안 영상을 미리 내려받음(2MB 조각 3개 병렬) → 가이드를 열자마자 재생',
           'AI가 고른 <b>완성 장면</b>을 표지로 쓰고, 마음에 들지 않으면 직접 고르는 "표지 바꾸기"'])}
-<div class="land">{phone(T+'p_land.jpg','가로 모드','land')}</div>
-<div class="phones">{phone(T+'p_play.jpg','세로 가이드','short')}{phone(T+'p_pick.jpg','표지 고르기','short','position:absolute;bottom:0')}</div>
+<div class="phones">{phone(R('s_play.jpg','p_play.jpg'),'영상 가이드')}{phone(R('s_hero.jpg','p_pick.jpg'),'완성 장면 표지')}</div>
 '''))
 d2.append(('', f'''
 <div class="tag">트러블슈팅 · v1.4</div>
@@ -236,7 +240,7 @@ d2.append(('', f'''
   steps.forEach((x, i) =&gt; { <span class="k">if</span> (x.clip.start &gt;= last + <span class="s">0.5</span>)
     { out.push({ i, start: x.clip.start }); last = x.clip.start; } }); }''')}
 '''))
-d2.append(('', f'''
+d2.append(('personal', f'''
 <div class="tag">홍보 · 데모 영상</div>
 <h2>20초 데모<br>광고 영상 제작</h2>
 {bullets(['준비한 요리 영상과 앱 화면을 엮어 "릴스 공유 → 레시피 완성" 흐름을 20초로 구성',
@@ -330,7 +334,7 @@ d4.append(('', f'''
 <table class="tb tb3">
 <tr><th>단계</th><th>내용</th></tr>
 <tr><td>1 (완료)</td><td>하루 분석 횟수 제한, 실패 기록, 개인정보 최소화, 자동 테스트</td></tr>
-<tr><td>2</td><td>평가 모드(릴스 20개 일괄 분석 후 정답 체크), 레시피 직접 수정, "결과가 이상해요" 재분석</td></tr>
+<tr><td>2 (완료·v1.7)</td><td>평가 모드(릴스 20개 일괄 분석 후 정답 체크), 레시피 직접 수정, "결과가 이상해요" 재분석</td></tr>
 <tr><td>3</td><td>갤러리 영상 음성 분석, 영상 용량 확대, 코드 파일 분리, 타이머 알림</td></tr>
 <tr><td>4</td><td>요리 모드 음성 명령, 레시피 검색·태그, 카카오톡 공유, 피드 신고·차단</td></tr>
 <tr><td>5</td><td>출시 시 유료 요금제 전환, 수집 방식 재검토, 약관 전문가 검토</td></tr>
@@ -359,7 +363,7 @@ d4.append(('', f'''
 '''))
 d4.append(('', f'''
 <div class="tag">품질 관리</div>
-<h2>배포 전 자동 테스트<br>9개 시나리오</h2>
+<h2>배포 전 자동 테스트<br>9개 → 10개</h2>
 <table class="tb tb2">
 <tr><td>e2e_full</td><td>공유 → 분석 → 저장 전체 흐름</td></tr>
 <tr><td>share_before_consent</td><td>동의 전 공유가 들어온 경우</td></tr>
@@ -369,10 +373,10 @@ d4.append(('', f'''
 <tr><td>video_only</td><td>영상만 있는 릴스 2단계 분석</td></tr>
 <tr><td>daily_limit · multi_quota_ui</td><td>하루 10회 제한, 다중 레시피·한도 화면</td></tr>
 </table>
-{rows([(('설계','good'),'가짜 서버(mock-server)로 동작해 실제 API 키와 무료 AI 사용량을 쓰지 않음. bash tests/run_all.sh 한 번으로 전체 실행'),
+{rows([(('설계','good'),'v1.6에서 9개로 시작해 v1.7에서 10개로. 가짜 서버(mock-server)로 동작해 실제 API 키와 무료 AI 사용량을 쓰지 않고, 명령 한 번으로 전체 실행'),
        (('문제','bad'),'테스트가 간헐적으로 실패 — 이전 테스트 서버 프로세스가 포트를 점유하고 있었음 → 실행 전 포트 정리, 잠깐 나타났다 사라지는 화면 문구 대신 서버 기록으로 검증')])}
 '''))
-d4.append(('', f'''
+d4.append(('personal', f'''
 <div class="tag">작업 환경</div>
 <h2>DB 변경 통합과<br>작업 규칙 문서화</h2>
 {rows([(('문제','bad'),'DB 구조 변경이 버전마다 별도 SQL 파일로 나뉘어 있어, 어떤 파일을 어디서 실행해야 하는지 혼란'),
@@ -410,12 +414,12 @@ DAYS.append((4, d4))
 d5 = []
 d5.append(('cover', f'''
 <div class="kick">2026.11.15 (일)</div>
-<h1>회고, 그리고<br>평가로 고치는 하루</h1>
-<p class="lead">지금까지의 대화와 커밋 기록을 날짜별로 다시 검토해 개발 일지를 정리했습니다. 무엇을 만들었고, 어디서 막혔고, 어떻게 풀었는지를 돌아봅니다. 이어서 평가 모드로 실제 릴스의 정확도를 측정하고, 앱을 닫아도 분석이 끝나고 알림이 오는 구조를 완성했습니다.</p>
+<h1>평가로<br>고치는 하루</h1>
+<p class="lead">평가 모드로 실제 릴스의 정확도를 측정하고, 앱을 닫아도 분석이 끝나고 알림이 오는 구조를 완성했습니다.</p>
 <div class="stat"><div><b>11건</b>GitHub 커밋</div><div><b>v1.7 → v1.9.2</b>버전</div><div><b>29% → 67%</b>평가 정확도</div></div>
-<div class="chips"><span>회고</span><span>진단형 평가 모드</span><span>이어서 분석</span><span>서버 백그라운드 분석</span><span>분석 완료 알림</span><span>재현 테스트</span><span>자동 테스트 15개</span></div>
+<div class="chips"><span>진단형 평가 모드</span><span>이어서 분석</span><span>서버 백그라운드 분석</span><span>분석 완료 알림</span><span>재현 테스트</span><span>자동 테스트 15개</span></div>
 '''))
-d5.append(('', f'''
+d5.append(('personal', f'''
 <div class="tag">회고</div>
 <h2>프롬프트가 기능이<br>되기까지</h2>
 <div class="map">
@@ -428,16 +432,16 @@ d5.append(('', f'''
 </div>
 <p class="note">효과적이었던 요청 방식 · 현상을 구체적으로 + 원하는 결과 + 우선순위를 한 번에 전달</p>
 '''))
-d5.append(('', f'''
+d5.append(('personal', f'''
 <div class="tag">회고</div>
 <h2>배운 점과<br>다음 계획</h2>
 <div class="list">
  <div class="li"><div class="n">1</div><div><b>비밀 정보는 코드와 대화 밖에서 관리</b><span>API 키·테스터 이메일은 Vercel 환경변수에만, Supabase 비밀 키는 정해진 헤더로만 전송</span></div></div>
  <div class="li"><div class="n">2</div><div><b>무료 한도는 설계로 아낀다</b><span>모델 자동 전환, 결과 캐시, 영상 장면 수 조절, 필요할 때만 2단계 분석</span></div></div>
- <div class="li"><div class="n">3</div><div><b>작게 자주 배포하고 자동으로 검증</b><span>5일간 29번 커밋, 회귀 버그 이후 시나리오별 자동 테스트 도입</span></div></div>
+ <div class="li"><div class="n">3</div><div><b>작게 자주 배포하고 자동으로 검증</b><span>5일간 커밋 42건, 회귀 버그 이후 시나리오별 자동 테스트 도입</span></div></div>
  <div class="li"><div class="n">4</div><div><b>기능과 약관은 함께 바뀐다</b><span>새로운 데이터를 다룰 때마다 처리방침을 고치고 재동의</span></div></div>
 </div>
-<div class="next"><b>다음 계획</b>평가 모드로 분석 정확도를 수치화 · 레시피 직접 수정 · "결과가 이상해요" 재분석</div>
+<div class="next"><b>다음 계획</b>평가 표본을 늘려 정확도 재측정 · 레시피를 믿을 수 있게 근거 표시 · 사용자 입장 검토</div>
 '''))
 d5.append(('', f'''
 <div class="tag">품질 관리 · 평가 모드 개선</div>
@@ -540,9 +544,9 @@ d6 = []
 d6.append(('cover', f'''
 <div class="kick">2026.11.16 (월) · 11/15 저녁 – 11/17 새벽</div>
 <h1>세 사람의 눈으로<br>다시 본 릴쿡</h1>
-<p class="lead">사용자·운영자·공모전 심사위원 세 입장에서 앱을 검토해 <b>우선순위 지침</b>을 만들고, 그 순서대로 고쳤습니다. 개발자 혼자 하던 채점을 <b>AI 채점</b>으로 바꾸고, 틀린 결과에서 <b>일반 규칙을 배워 다음 분석에 적용</b>하는 구조와, 사용자가 레시피를 믿을 수 있게 하는 <b>근거 표시</b>까지 이어졌습니다. 채팅에서는 <b>수익 모델과 출시 준비</b>(비공개 테스트·설문)를 검토했습니다.</p>
+<p class="lead">사용자·운영자·공모전 심사위원 세 입장에서 앱을 검토해 <b>우선순위 지침</b>을 만들고, 그 순서대로 고쳤습니다. 개발자 혼자 하던 채점을 <b>AI 채점</b>으로 바꾸고, 틀린 결과에서 <b>일반 규칙을 배워 다음 분석에 적용</b>하는 구조와, 사용자가 레시피를 믿을 수 있게 하는 <b>근거 표시</b>까지 이어졌습니다. 채팅에서는 <b>출시 검증 계획</b>(비공개 테스트·설문 지표)을 세웠습니다.</p>
 <div class="stat"><div><b>11건</b>GitHub 커밋</div><div><b>v1.9.2 → v1.15</b>버전</div><div><b>15 → 22개</b>자동 테스트</div></div>
-<div class="chips"><span>피드백 지침</span><span>첫 실행 안내</span><span>원작자 표시</span><span>사용성 설문(SUS)</span><span>운영 지표·비용</span><span>AI 채점</span><span>배운 규칙</span><span>근거 표시</span><span>수익화·출시 검토</span></div>
+<div class="chips"><span>피드백 지침</span><span>첫 실행 안내</span><span>원작자 표시</span><span>사용성 설문(SUS)</span><span>운영 지표·비용</span><span>AI 채점</span><span>배운 규칙</span><span>근거 표시</span><span>출시 검증 계획</span></div>
 '''))
 d6.append(('', f'''
 <div class="tag">방향 설정 · 피드백 지침</div>
@@ -552,7 +556,7 @@ d6.append(('', f'''
  <div class="m"><div class="p"><b>운영자</b> · 점검 주소가 누구에게나 열려 있고, 하루 몇 건·얼마가 드는지 모른다</div><div class="a">→</div><div class="f">F-A1~A3<span>점검 보호·운영 지표·DB 보안 성능</span></div></div>
  <div class="m"><div class="p"><b>심사위원</b> · 12개를 개발자 본인이 채점한 정확도는 표본이 작고 주관적이다</div><div class="a">→</div><div class="f">F-J1~J3<span>AI 채점·사용성 설문·건당 비용</span></div></div>
 </div>
-<p class="note">지침 파일(docs/feedback-2026-11-15.md)을 작업 기준으로 두고, 끝난 항목은 체크하고 커밋에 항목 번호를 남김. 같은 날 Supabase 보안 점검 경고(함수 외부 호출 권한)와 누락된 인덱스도 정리</p>
+<p class="note">지침 문서를 작업 기준으로 두고, 끝난 항목은 체크하고 커밋에 항목 번호를 남김. 같은 날 Supabase 보안 점검 경고(함수 외부 호출 권한)와 누락된 인덱스도 정리</p>
 '''))
 d6.append(('', f'''
 <div class="tag">디자인 · v1.10</div>
@@ -657,7 +661,7 @@ d6.append(('', f'''
 <tr><td>16:21</td><td>v1.13</td><td>AI 교차 채점(채점 AI 2 + 검토 AI)</td></tr>
 <tr><td>17:12</td><td>v1.13.1</td><td>4회차 반영: 채점 모델·순서, 수집 재시도</td></tr>
 <tr><td>18:08</td><td>v1.13.2</td><td>한도 초기화 직후 사용량 표시</td></tr>
-<tr><td>11/16 (채팅)</td><td>—</td><td>수익화·출시 검토: 수익 모델, 비공개 테스트, 설문</td></tr>
+<tr><td>11/16 (채팅)</td><td>—</td><td>출시 검증 계획: 비공개 테스트, 설문 지표</td></tr>
 <tr><td>11/17 00:47</td><td>v1.14</td><td>배운 규칙, 5회차 반영</td></tr>
 <tr><td>11/17 01:21</td><td>v1.15</td><td>재료별 근거, 캡션 대조, 신고로 학습</td></tr>
 </table>
@@ -668,7 +672,7 @@ _x = PRIV / 'd6_extra.py'
 if _x.exists():
     _ns = {'rows': rows, 'bullets': bullets, 'code': code, 'phones': phones, 'T': T}
     exec(_x.read_text(), _ns)
-    d6[-1:-1] = [('', b) for b in _ns['CARDS']]
+    d6[-1:-1] = [b if isinstance(b, tuple) else ('personal', b) for b in _ns['CARDS']]
 DAYS.append((6, d6))
 
 # Day 7부터: 카드 전체가 개인 자료인 날은 devlog/private/dN_cards.py 에 둔다(공개 저장소 제외)
@@ -740,12 +744,14 @@ DAYS.insert(0, ('pin', dp))
 (BASE / 'out').mkdir(exist_ok=True)
 out = ['<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>', CSS, '</style></head><body>']
 ids = []
+_SET = os.environ.get('SET', 'eval')   # eval: 평가용(개인 기록 카드 제외) · full: 개인 기록용(평가 전용 카드 제외)
 for day, cards in DAYS:
+    cards = [c for c in cards if ('personal' not in c[0] if _SET == 'eval' else 'evalonly' not in c[0])]
     n = len(cards)
     for i, (cls, body) in enumerate(cards, 1):
         cid = f'pin_{i:02d}' if day=='pin' else f'd{day}_{i:02d}'
         ids.append(cid)
-        out.append(f'<section class="card {cls}" id="{cid}">{head(day, i, n)}{body}</section>')
+        out.append(f'<section class="card {cls.replace('personal','').replace('evalonly','').strip()}" id="{cid}">{head(day, i, n)}{body}</section>')
 out.append('''<script>
 // 카드 아래로 넘치면 t1→t2→t3 순서로 글자·여백을 조금씩 줄인다
 document.querySelectorAll('.card').forEach(c=>{
