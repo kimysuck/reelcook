@@ -529,7 +529,7 @@ p,h1,h2,h3,.prog-title,.sum,.lead,.note,.err,.toast,.empty,.tips,.banner,.instal
 <div id="layer"></div>
 
 <script>
-const VERSION='v1.15';
+const VERSION='v1.15.1';
 const SV=(d)=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const IC={
   back:SV('<path d="M15 5l-7 7 7 7"/>'), down:SV('<path d="M6 9l6 6 6-6"/>'), x:SV('<path d="M6 6l12 12M18 6 6 18"/>'),
@@ -1599,6 +1599,11 @@ function evSummary(){
     const autoBad=withInfo.filter(x=>x.info.auto&&x.info.auto.bad.length); if (autoBad.length) out.push(`- 자동 검사에서 캡션과 분량이 다름: ${tally(autoBad)}`);
   }
   const jd=done.filter(x=>x.judge);
+  // 6회차: AI 채점이 끝나기 전에 요약을 복사해 채점 결과가 빠졌다 → 아직 채점 중인 개수를 알린다
+  const jp=done.filter(x=>x.status==='ok' && !x.judge && !x.judgeErr && (x.judging||x.judgeJob)).length;
+  if (jp) out.push('', `[AI 채점 진행 중] ${jp}개가 아직 채점 중이에요. 끝난 뒤 다시 복사하면 채점 결과와 배운 규칙이 함께 들어가요.`);
+  // 무료 한도 탓에 간단 모델(lite)이 분석한 개수 — 정확도가 낮을 수 있다
+  const lite=done.filter(x=>x.status==='ok' && /lite/.test(x.model||'')); if (lite.length) out.push(`[간단 모델로 분석] ${lite.length}/${done.filter(x=>x.status==='ok').length}개 (좋은 모델의 무료 한도가 바닥나서. 정확도가 낮을 수 있어요)`);
   if (jd.length){
     const ok=jd.filter(x=>x.judge.pass).length, both=jd.filter(x=>x.mark), same=both.filter(x=>(x.mark==='ok')===x.judge.pass).length;
     const models=[...new Set(jd.flatMap(x=>[x.judge.models.A, x.judge.models.B, x.judge.models.ARB]).filter(Boolean))];
@@ -1617,7 +1622,7 @@ function evSummary(){
   if (whyN.length) out.push('', `[틀린 이유] ${whyN.map(([l,n])=>`${l} ${n}`).join(' · ')}`);
   const flip=it.filter(x=>x.prevMark && x.mark && x.prevMark!==x.mark); if (flip.length) out.push(`[지난번과 달라짐] ${flip.map(x=>`${it.indexOf(x)+1}번 ${x.prevMark==='ok'?'✓→✗':'✗→✓'}`).join(', ')}`);
   const line=(x,i,deep)=>{ if (x.status!=='ok') return `${i+1}. ${x.link} — ${x.status==='fail'?'실패: '+x.err:'분석 안 함'}`;
-    const f=x.info, l=[`${i+1}. ${x.link} — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초)${x.mark==='ng'?` ✗ ${(x.why||[]).map(w=>(EV_WHY.find(y=>y[0]===w)||[,w])[1]).join(', ')||'이유 없음'}`:x.mark==='ok'?' ✓':''}${x.memo?` / 메모: ${x.memo}`:''}`];
+    const f=x.info, l=[`${i+1}. ${x.link} — ${x.titles.join(' / ')} (재료 ${x.nIng}·단계 ${x.nStep}, ${x.mode||'-'}, ${x.sec||0}초${x.model?`, ${x.model.replace(/^gemini-/,'')}`:''})${x.mark==='ng'?` ✗ ${(x.why||[]).map(w=>(EV_WHY.find(y=>y[0]===w)||[,w])[1]).join(', ')||'이유 없음'}`:x.mark==='ok'?' ✓':''}${x.memo?` / 메모: ${x.memo}`:''}`];
     if (x.judge) l.push(`   AI 채점 ${x.judge.pass?'맞음':'틀림'}: ${judgeLine(x.judge)}${EV_CRIT.filter(([k])=>!x.judge.criteria[k].pass).map(([k,lb])=>` | ${lb}: ${x.judge.criteria[k].reason||''}`).join('')}${x.judge.learn?` | ${LEARN_TXT(x.judge.learn)}`:''}`);
     if (f){ l.push(`   자료: ${evHave(f)} | 근거: ${evUsed(f)} | 추정 ${f.est}/${f.nAll} | 확신 ${f.conf||'-'}${f.auto?` | 자동검사 ${f.auto.checked-f.auto.bad.length}/${f.auto.checked}${f.auto.bad.length?' 다름: '+f.auto.bad.join(', '):''}`:''}`);
       if (deep){ if (f.evSubs) l.push(`   AI가 읽은 자막: ${f.evSubs}`); if (f.evSpeech) l.push(`   AI가 들은 음성: ${f.evSpeech}`); if (f.cmUsed.length) l.push(`   쓴 댓글: ${f.cmUsed.join(', ')}`); } }
